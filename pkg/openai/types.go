@@ -75,6 +75,13 @@ type ChatMessage struct {
 	// Content is the contents of the message.
 	Content string `json:"content"`
 
+	// Images holds any image parts supplied via an array-shaped `content`
+	// field (OpenAI `image_url` parts). Each entry is the raw `url` value,
+	// which is typically a data URI (e.g. "data:image/png;base64,...").
+	// This is not marshalled back out; it exists so multimodal input can be
+	// forwarded to vision-capable backends.
+	Images []string `json:"-"`
+
 	// Name is an optional name for the participant (for multi-user chats).
 	Name string `json:"name,omitempty"`
 
@@ -88,9 +95,9 @@ type ChatMessage struct {
 // UnmarshalJSON decodes a chat message, accepting the OpenAI `content` field in
 // either of its two valid shapes: a plain string, or an array of content parts
 // (e.g. [{"type":"text","text":"..."}, {"type":"image_url", ...}]). Text parts
-// are concatenated (joined with newlines); non-text parts (such as image_url)
-// are skipped because the backend models are text-only. This keeps the public
-// Content field a flat string so all downstream consumers are unaffected.
+// are concatenated (joined with newlines) into Content; image_url parts are
+// collected into Images so multimodal input can be forwarded to vision-capable
+// backends. Content stays a flat string so text-only consumers are unaffected.
 func (m *ChatMessage) UnmarshalJSON(data []byte) error {
 	// Alias avoids infinite recursion; Content captured raw for custom handling.
 	type alias ChatMessage
@@ -103,48 +110,56 @@ func (m *ChatMessage) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	m.Content = flattenContent(aux.Content)
+	m.Content, m.Images = flattenContent(aux.Content)
 	return nil
 }
 
 // flattenContent converts the raw JSON of an OpenAI message `content` field into
-// a plain string. It accepts a JSON string, a JSON array of content parts, or
-// null/absent (which yields an empty string).
-func flattenContent(raw json.RawMessage) string {
+// a plain text string and a list of image URLs. It accepts a JSON string, a JSON
+// array of content parts, or null/absent (which yields an empty string and no
+// images).
+func flattenContent(raw json.RawMessage) (string, []string) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || string(trimmed) == "null" {
-		return ""
+		return "", nil
 	}
 
 	// Plain string content.
 	if trimmed[0] == '"' {
 		var s string
 		if err := json.Unmarshal(trimmed, &s); err == nil {
-			return s
+			return s, nil
 		}
-		return ""
+		return "", nil
 	}
 
 	// Array of content parts.
 	if trimmed[0] == '[' {
 		var parts []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
+			Type     string `json:"type"`
+			Text     string `json:"text"`
+			ImageURL *struct {
+				URL string `json:"url"`
+			} `json:"image_url"`
 		}
 		if err := json.Unmarshal(trimmed, &parts); err != nil {
-			return ""
+			return "", nil
 		}
 		var texts []string
+		var images []string
 		for _, p := range parts {
-			// Collect text parts; skip images and other non-text modalities.
-			if p.Text != "" && (p.Type == "" || p.Type == "text") {
+			switch {
+			case p.ImageURL != nil && p.ImageURL.URL != "":
+				// image_url part: retain the URL (usually a data URI).
+				images = append(images, p.ImageURL.URL)
+			case p.Text != "" && (p.Type == "" || p.Type == "text"):
 				texts = append(texts, p.Text)
 			}
 		}
-		return strings.Join(texts, "\n")
+		return strings.Join(texts, "\n"), images
 	}
 
-	return ""
+	return "", nil
 }
 
 // ChatCompletionResponse represents the response from /v1/chat/completions.

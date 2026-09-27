@@ -773,6 +773,15 @@ func convertMessages(messages []openai.ChatMessage) []ollama.ChatMessage {
 			Role:    msg.Role,
 			Content: msg.Content,
 		}
+
+		// Forward any image parts to the backend. Ollama's /api/chat expects
+		// raw base64 in the `images` array, so strip the data-URI prefix
+		// (e.g. "data:image/png;base64,") that OpenAI-style clients include.
+		for _, img := range msg.Images {
+			if b64 := stripDataURIPrefix(img); b64 != "" {
+				om.Images = append(om.Images, b64)
+			}
+		}
 		
 		// Assistant messages may carry tool calls that must be replayed to
 		// the model. OpenAI encodes arguments as a JSON string; Ollama expects
@@ -800,6 +809,22 @@ func convertMessages(messages []openai.ChatMessage) []ollama.ChatMessage {
 		result = append(result, om)
 	}
 	return result
+}
+
+// stripDataURIPrefix returns the raw base64 payload of a data URI. Ollama's
+// image field wants base64 without the "data:<mime>;base64," scheme prefix.
+// If the input carries no such prefix it is returned unchanged (already raw
+// base64); plain remote URLs, which Ollama cannot fetch, are also passed
+// through as-is so the backend can decide how to handle them.
+func stripDataURIPrefix(s string) string {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "data:") {
+		return s
+	}
+	if i := strings.IndexByte(s, ','); i >= 0 {
+		return s[i+1:]
+	}
+	return s
 }
 
 // convertTools maps OpenAI tool definitions to the Ollama tool schema.
