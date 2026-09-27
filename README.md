@@ -223,6 +223,7 @@ server:
 
 ollama:
   endpoint: "http://localhost:11434"
+  max_connections: 100          # HTTP connection-pool size (warm keep-alive reuse)
 
 auth:
   enabled: true
