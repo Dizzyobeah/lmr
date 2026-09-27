@@ -4,7 +4,9 @@
 package openai
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -81,6 +83,68 @@ type ChatMessage struct {
 
 	// ToolCallID is the ID of the tool call this message is responding to.
 	ToolCallID string `json:"tool_call_id,omitempty"`
+}
+
+// UnmarshalJSON decodes a chat message, accepting the OpenAI `content` field in
+// either of its two valid shapes: a plain string, or an array of content parts
+// (e.g. [{"type":"text","text":"..."}, {"type":"image_url", ...}]). Text parts
+// are concatenated (joined with newlines); non-text parts (such as image_url)
+// are skipped because the backend models are text-only. This keeps the public
+// Content field a flat string so all downstream consumers are unaffected.
+func (m *ChatMessage) UnmarshalJSON(data []byte) error {
+	// Alias avoids infinite recursion; Content captured raw for custom handling.
+	type alias ChatMessage
+	aux := &struct {
+		Content json.RawMessage `json:"content"`
+		*alias
+	}{alias: (*alias)(m)}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	m.Content = flattenContent(aux.Content)
+	return nil
+}
+
+// flattenContent converts the raw JSON of an OpenAI message `content` field into
+// a plain string. It accepts a JSON string, a JSON array of content parts, or
+// null/absent (which yields an empty string).
+func flattenContent(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return ""
+	}
+
+	// Plain string content.
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err == nil {
+			return s
+		}
+		return ""
+	}
+
+	// Array of content parts.
+	if trimmed[0] == '[' {
+		var parts []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(trimmed, &parts); err != nil {
+			return ""
+		}
+		var texts []string
+		for _, p := range parts {
+			// Collect text parts; skip images and other non-text modalities.
+			if p.Text != "" && (p.Type == "" || p.Type == "text") {
+				texts = append(texts, p.Text)
+			}
+		}
+		return strings.Join(texts, "\n")
+	}
+
+	return ""
 }
 
 // ChatCompletionResponse represents the response from /v1/chat/completions.

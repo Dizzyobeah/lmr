@@ -29,10 +29,15 @@ ollama:
   # Can be overridden with OLLAMA_ENDPOINT environment variable
   endpoint: "http://localhost:11434"
   
-  # Request timeout for Ollama API calls
+  # Request timeout for Ollama API calls.
+  # Used as the response-header (time-to-first-byte) budget. It does NOT cap
+  # the duration of streamed responses, which are governed by the request
+  # context instead.
   timeout: 120s
   
-  # Maximum number of concurrent connections to Ollama
+  # Size of the HTTP connection pool to Ollama. Warm keep-alive connections are
+  # reused up to this limit, avoiding a TCP+HTTP handshake on every request
+  # under concurrency. Set near your expected max concurrent in-flight requests.
   max_connections: 100
   
   # How often to refresh the available models list

@@ -78,7 +78,7 @@ func main() {
 	// --- Initialize components ---
 
 	// Ollama client and model cache
-	ollamaClient := ollama.NewClient(cfg.Ollama.Endpoint, cfg.Ollama.Timeout)
+	ollamaClient := ollama.NewClient(cfg.Ollama.Endpoint, cfg.Ollama.Timeout, cfg.Ollama.MaxConnections)
 	modelCache := ollama.NewModelCache(ollamaClient, cfg.Ollama.RefreshInterval)
 	if err := modelCache.Start(ctx); err != nil {
 		log.Warn().Err(err).Msg("Model cache failed initial refresh; continuing")

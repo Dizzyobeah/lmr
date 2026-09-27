@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -143,11 +144,45 @@ type EmbeddingResponse struct {
 }
 
 // NewClient creates a new Ollama client.
-func NewClient(endpoint string, timeout time.Duration) *Client {
+//
+// maxConns sizes the HTTP connection pool. Ollama is a single host, so we set
+// the per-host idle/open connection limits equal to maxConns to keep warm,
+// reusable keep-alive connections and avoid a TCP+HTTP handshake on every
+// request under concurrency (Go's default MaxIdleConnsPerHost is only 2).
+//
+// The per-request timeout is intentionally NOT applied as http.Client.Timeout,
+// because that would also cap the duration of long streamed responses. Instead
+// we bound only the connection-establishment and response-header phases and let
+// the caller's context deadline govern the overall request. The timeout value
+// is used as the response-header timeout (time-to-first-byte) budget.
+func NewClient(endpoint string, timeout time.Duration, maxConns int) *Client {
+	if maxConns <= 0 {
+		maxConns = 100
+	}
+
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:        maxConns,
+		MaxIdleConnsPerHost: maxConns,
+		MaxConnsPerHost:     maxConns,
+		IdleConnTimeout:     90 * time.Second,
+		// Ollama speaks HTTP/1.1; skip HTTP/2 negotiation overhead.
+		ForceAttemptHTTP2: false,
+		// Bound only the wait for response headers, not the streamed body.
+		ResponseHeaderTimeout: timeout,
+	}
+
 	return &Client{
 		endpoint: endpoint,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Transport: transport,
+			// No global timeout: streaming responses must not be severed.
+			// Callers pass a context with the appropriate deadline.
+			Timeout: 0,
 		},
 	}
 }
