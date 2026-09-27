@@ -1,0 +1,53 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+local-model-router
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Config with secrets
+config.yaml
+!config.example.yaml
+
+# Environment
+.env
+.env.local
+.envrc
+
+# Logs
+*.log
+
+# Docker
+docker-compose.override.yml
+.env
+.opencode/*

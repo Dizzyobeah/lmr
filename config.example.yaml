@@ -1,0 +1,236 @@
+# Local Model Router - Example Configuration
+# Copy this file to config.yaml and adjust as needed.
+
+# ============================================================
+# Server Configuration
+# ============================================================
+server:
+  # Address to bind to (use 0.0.0.0 for all interfaces)
+  host: "0.0.0.0"
+  
+  # Port to listen on
+  port: 8080
+  
+  # Maximum duration for reading the entire request
+  read_timeout: 30s
+  
+  # Maximum duration before timing out writes of the response
+  # Set high for streaming responses
+  write_timeout: 120s
+  
+  # Maximum amount of time to wait for the next request
+  idle_timeout: 60s
+
+# ============================================================
+# Ollama Configuration
+# ============================================================
+ollama:
+  # Ollama API endpoint
+  # Can be overridden with OLLAMA_ENDPOINT environment variable
+  endpoint: "http://localhost:11434"
+  
+  # Request timeout for Ollama API calls
+  timeout: 120s
+  
+  # Maximum number of concurrent connections to Ollama
+  max_connections: 100
+  
+  # How often to refresh the available models list
+  refresh_interval: 5m
+
+# ============================================================
+# Authentication Configuration
+# ============================================================
+auth:
+  # Enable API key authentication
+  # When enabled, all API requests require a valid API key
+  enabled: true
+  
+  # Encryption key for storing sensitive data (32 bytes, hex encoded)
+  # IMPORTANT: Set via AUTH_ENCRYPTION_KEY environment variable
+  # Generate with: openssl rand -hex 32
+  # encryption_key: ""  # Set via AUTH_ENCRYPTION_KEY env var
+
+# ============================================================
+# Key Store Configuration
+# ============================================================
+keystore:
+  # Path to the SQLite database file for storing API keys
+  path: "./data/keys.db"
+
+# ============================================================
+# Admin UI Configuration
+# ============================================================
+admin:
+  # Enable the admin web interface
+  enabled: true
+  
+  # Admin username
+  username: "admin"
+  
+  # Admin password
+  # IMPORTANT: Set via ADMIN_PASSWORD environment variable
+  # password: ""  # Set via ADMIN_PASSWORD env var
+  
+  # URL path prefix for admin UI
+  path: "/admin"
+  
+  # Admin session duration
+  session_ttl: 24h
+  
+  # Number of recent requests to keep in memory for display
+  recent_requests_limit: 1000
+
+# ============================================================
+# Routing Configuration
+# ============================================================
+routing:
+  # Default model to use when auto-routing can't determine a preference
+  # Set to "auto" to use the first available model
+  default_model: "auto"
+
+  # Force intelligent routing for every request.
+  # When true, the model named in a request is ignored and the router always
+  # selects the best model based on content. This lets clients such as OpenCode
+  # treat the router as a single virtual model: configure it once and never pick
+  # a model again. Set to false to honor the requested model (legacy behavior).
+  force_routing: true
+
+  # Model name advertised by GET /v1/models when force_routing is enabled.
+  # Clients select this single model and all requests are routed intelligently.
+  virtual_model_name: "auto"
+
+  # Human-readable description for the virtual model (informational).
+  virtual_model_description: "Intelligent router that selects the best model per request"
+  
+  # Task capability configurations
+  # Maps task types to keywords, patterns, and preferred models
+  capabilities:
+    code:
+      keywords:
+        - "code"
+        - "function"
+        - "implement"
+        - "debug"
+        - "refactor"
+        - "fix bug"
+        - "programming"
+        - "script"
+      patterns:
+        - "\\.py$"
+        - "\\.go$"
+        - "\\.js$"
+        - "\\.ts$"
+        - "\\.java$"
+        - "\\.rs$"
+        - "\\.cpp$"
+        - "\\.c$"
+        - "\\.rb$"
+      prefer_models:
+        - "deepseek-coder"
+        - "codellama"
+        - "qwen2.5-coder"
+        - "starcoder2"
+    
+    reasoning:
+      keywords:
+        - "explain"
+        - "why"
+        - "how does"
+        - "analyze"
+        - "compare"
+        - "reason"
+        - "think"
+        - "understand"
+      prefer_models:
+        - "deepseek-r1"
+        - "llama3.2:70b"
+        - "llama3.2"
+        - "mixtral"
+    
+    simple:
+      keywords:
+        - "what is"
+        - "define"
+        - "list"
+        - "quick"
+        - "briefly"
+        - "short"
+      prefer_models:
+        - "phi3"
+        - "llama3.2:1b"
+        - "gemma2:2b"
+        - "tinyllama"
+      # Route short prompts to fast models
+      max_input_tokens: 50
+    
+    creative:
+      keywords:
+        - "story"
+        - "poem"
+        - "imagine"
+        - "write about"
+        - "creative"
+        - "fiction"
+        - "narrative"
+      prefer_models:
+        - "llama3.2"
+        - "mistral"
+        - "neural-chat"
+    
+    math:
+      keywords:
+        - "calculate"
+        - "solve"
+        - "equation"
+        - "integral"
+        - "derivative"
+        - "math"
+        - "algebra"
+        - "geometry"
+      prefer_models:
+        - "deepseek-math"
+        - "wizard-math"
+        - "llama3.2"
+
+  # Custom routing rules (evaluated before auto-classification)
+  # Rules are evaluated in priority order (highest first)
+  rules: []
+  # Example rules:
+  # - name: "Python Expert"
+  #   pattern: "(?i)python|def\\s+\\w+|import\\s+"
+  #   model: "deepseek-coder"
+  #   priority: 10
+  #
+  # - name: "Kubernetes Questions"
+  #   pattern: "(?i)kubernetes|k8s|kubectl|helm|pod|deployment"
+  #   model: "llama3.2"
+  #   priority: 5
+
+# ============================================================
+# Metrics Configuration
+# ============================================================
+metrics:
+  # Enable Prometheus metrics collection and endpoint
+  enabled: true
+  
+  # URL path for the metrics endpoint
+  path: "/metrics"
+  
+  # Enable detailed per-model metrics
+  # May increase cardinality if you have many models
+  detailed: true
+
+# ============================================================
+# Logging Configuration
+# ============================================================
+logging:
+  # Minimum log level: debug, info, warn, error
+  level: "info"
+  
+  # Log format: json (structured) or text (human-readable)
+  format: "json"
+  
+  # Log request/response bodies
+  # WARNING: May contain sensitive data, use only for debugging
+  log_bodies: false

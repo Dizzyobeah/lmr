@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Model Router - Admin</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/alpinejs@3.13.5" defer></script>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: #0f3460;
+            --text-primary: #eaeaea;
+            --text-secondary: #a0a0a0;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --error: #ef4444;
+            --border: #374151;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: var(--bg-secondary);
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        header h1 {
+            font-size: 1.5rem;
+            color: var(--accent);
+        }
+        
+        nav {
+            display: flex;
+            gap: 20px;
+        }
+        
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        
+        nav a:hover, nav a.active {
+            color: var(--text-primary);
+            background: var(--bg-card);
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+        }
+        
+        .card h2 {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: var(--bg-card);
+            border-radius: 8px;
+        }
+        
+        .stat-item .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .stat-item .label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-healthy { background: var(--success); }
+        .status-degraded { background: var(--warning); }
+        .status-unhealthy { background: var(--error); }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        
+        tr:hover {
+            background: var(--bg-card);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge-code { background: #3b82f6; }
+        .badge-reasoning { background: #8b5cf6; }
+        .badge-simple { background: #22c55e; }
+        .badge-creative { background: #f59e0b; }
+        .badge-math { background: #ef4444; }
+        .badge-general { background: #6b7280; }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+        
+        input, select {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 100%;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: var(--bg-secondary);
+            padding: 25px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+            border: 1px solid var(--border);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h3 {
+            font-size: 1.25rem;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .api-key-display {
+            background: var(--bg-card);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 15px 0;
+        }
+        
+        .htmx-indicator {
+            opacity: 0;
+            transition: opacity 200ms ease-in;
+        }
+        
+        .htmx-request .htmx-indicator {
+            opacity: 1;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .loading {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body x-data="adminApp()">
+    <header>
+        <h1>Local Model Router</h1>
+        <nav>
+            <a href="#" @click.prevent="currentTab = 'dashboard'" :class="{ active: currentTab === 'dashboard' }">Dashboard</a>
+            <a href="#" @click.prevent="currentTab = 'models'" :class="{ active: currentTab === 'models' }">Models</a>
+            <a href="#" @click.prevent="currentTab = 'keys'" :class="{ active: currentTab === 'keys' }">API Keys</a>
+            <a href="#" @click.prevent="currentTab = 'requests'" :class="{ active: currentTab === 'requests' }">Requests</a>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <!-- Dashboard Tab -->
+        <div x-show="currentTab === 'dashboard'" class="dashboard">
+            <div class="card">
+                <h2>System Status</h2>
+                <div hx-get="/admin/api/status" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Request Statistics</h2>
+                <div class="stat-grid" hx-get="/admin/api/stats" hx-trigger="load, every 5s" hx-swap="innerHTML">
+                    <div class="stat-item loading">
+                        <div class="value">-</div>
+                        <div class="label">Total Requests</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="value">-</div>
+                        <div class="label">Requests/min</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="value">-</div>
+                        <div class="label">Avg Latency</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="value">-</div>
+                        <div class="label">Tokens/min</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Model Usage</h2>
+                <div hx-get="/admin/api/model-usage" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Classification Distribution</h2>
+                <div hx-get="/admin/api/classification-stats" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                    <div class="loading">Loading...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Models Tab -->
+        <div x-show="currentTab === 'models'" class="card" style="margin-top: 20px;">
+            <h2>Available Models</h2>
+            <table hx-get="/admin/api/models" hx-trigger="load, every 30s" hx-swap="innerHTML">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Size</th>
+                        <th>Family</th>
+                        <th>Quantization</th>
+                        <th>Last Modified</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="5" class="loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- API Keys Tab -->
+        <div x-show="currentTab === 'keys'" class="card" style="margin-top: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">API Keys</h2>
+                <button class="btn btn-primary" @click="showCreateKeyModal = true">Create Key</button>
+            </div>
+            <table hx-get="/admin/api/keys" hx-trigger="load, keyCreated from:body, keyDeleted from:body" hx-swap="innerHTML">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Scopes</th>
+                        <th>Rate Limit</th>
+                        <th>Usage</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="7" class="loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Requests Tab -->
+        <div x-show="currentTab === 'requests'" class="card" style="margin-top: 20px;">
+            <h2>Recent Requests</h2>
+            <table hx-get="/admin/api/requests" hx-trigger="load, every 5s" hx-swap="innerHTML">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Endpoint</th>
+                        <th>Model</th>
+                        <th>Category</th>
+                        <th>Tokens</th>
+                        <th>Latency</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="7" class="loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Create API Key Modal -->
+    <div class="modal" x-show="showCreateKeyModal" x-cloak @keydown.escape.window="showCreateKeyModal = false">
+        <div class="modal-content" @click.away="showCreateKeyModal = false">
+            <div class="modal-header">
+                <h3>Create API Key</h3>
+                <button class="close-btn" @click="showCreateKeyModal = false">&times;</button>
+            </div>
+            <form hx-post="/admin/api/keys" hx-swap="none" @htmx:after-request="handleKeyCreated($event)">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="name" required placeholder="My API Key">
+                </div>
+                <div class="form-group">
+                    <label>Rate Limit (requests/min, 0 = unlimited)</label>
+                    <input type="number" name="rate_limit" value="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Scopes</label>
+                    <select name="scopes" multiple>
+                        <option value="*" selected>All (*)</option>
+                        <option value="chat">Chat</option>
+                        <option value="embeddings">Embeddings</option>
+                        <option value="models">Models</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Create Key</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Display New API Key Modal -->
+    <div class="modal" x-show="newAPIKey" x-cloak>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>API Key Created</h3>
+                <button class="close-btn" @click="newAPIKey = null">&times;</button>
+            </div>
+            <p style="color: var(--warning); margin-bottom: 15px;">
+                Make sure to copy your API key now. You won't be able to see it again!
+            </p>
+            <div class="api-key-display" x-text="newAPIKey"></div>
+            <button class="btn btn-primary" style="width: 100%;" @click="copyToClipboard(newAPIKey); newAPIKey = null">
+                Copy to Clipboard
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        function adminApp() {
+            return {
+                currentTab: 'dashboard',
+                showCreateKeyModal: false,
+                newAPIKey: null,
+                
+                handleKeyCreated(event) {
+                    if (event.detail.successful) {
+                        const response = JSON.parse(event.detail.xhr.responseText);
+                        this.newAPIKey = response.key;
+                        this.showCreateKeyModal = false;
+                        document.body.dispatchEvent(new CustomEvent('keyCreated'));
+                    }
+                },
+                
+                copyToClipboard(text) {
+                    navigator.clipboard.writeText(text);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
