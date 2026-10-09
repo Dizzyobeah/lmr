@@ -7,9 +7,10 @@ import (
 
 func TestChatMessageUnmarshalContent(t *testing.T) {
 	tests := []struct {
-		name string
-		json string
-		want string
+		name       string
+		json       string
+		want       string
+		wantImages []string
 	}{
 		{
 			name: "string content",
@@ -22,9 +23,22 @@ func TestChatMessageUnmarshalContent(t *testing.T) {
 			want: "line one\nline two",
 		},
 		{
-			name: "mixed text and image_url",
-			json: `{"role":"user","content":[{"type":"text","text":"describe this"},{"type":"image_url","image_url":{"url":"data:..."}}]}`,
-			want: "describe this",
+			name:       "mixed text and image_url",
+			json:       `{"role":"user","content":[{"type":"text","text":"describe this"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}]}`,
+			want:       "describe this",
+			wantImages: []string{"data:image/png;base64,AAAA"},
+		},
+		{
+			name:       "image only",
+			json:       `{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,BBBB"}}]}`,
+			want:       "",
+			wantImages: []string{"data:image/jpeg;base64,BBBB"},
+		},
+		{
+			name:       "multiple images",
+			json:       `{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,ONE"}},{"type":"image_url","image_url":{"url":"data:image/png;base64,TWO"}}]}`,
+			want:       "",
+			wantImages: []string{"data:image/png;base64,ONE", "data:image/png;base64,TWO"},
 		},
 		{
 			name: "null content",
@@ -51,6 +65,14 @@ func TestChatMessageUnmarshalContent(t *testing.T) {
 			}
 			if m.Content != tt.want {
 				t.Errorf("Content = %q, want %q", m.Content, tt.want)
+			}
+			if len(m.Images) != len(tt.wantImages) {
+				t.Fatalf("Images = %v, want %v", m.Images, tt.wantImages)
+			}
+			for i := range tt.wantImages {
+				if m.Images[i] != tt.wantImages[i] {
+					t.Errorf("Images[%d] = %q, want %q", i, m.Images[i], tt.wantImages[i])
+				}
 			}
 		})
 	}
