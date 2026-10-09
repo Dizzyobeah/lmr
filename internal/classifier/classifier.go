@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/rs/zerolog/log"
 )
 
 // TaskCategory represents a type of task.
@@ -107,7 +109,14 @@ func NewClassifier(config Config) (*Classifier, error) {
 		for _, p := range cfg.Patterns {
 			re, err := regexp.Compile(p)
 			if err != nil {
-				return nil, err
+				// A malformed capability pattern must not abort startup;
+				// log it and skip so the rest of the config still loads.
+				log.Warn().
+					Str("capability", name).
+					Str("pattern", p).
+					Err(err).
+					Msg("Skipping invalid capability pattern")
+				continue
 			}
 			cap.Patterns = append(cap.Patterns, re)
 		}
@@ -119,7 +128,14 @@ func NewClassifier(config Config) (*Classifier, error) {
 	for _, cfg := range config.Rules {
 		re, err := regexp.Compile(cfg.Pattern)
 		if err != nil {
-			return nil, err
+			// A malformed rule pattern must not abort startup; log it and
+			// skip so a single bad rule can't take the whole router down.
+			log.Warn().
+				Str("rule", cfg.Name).
+				Str("pattern", cfg.Pattern).
+				Err(err).
+				Msg("Skipping invalid rule pattern")
+			continue
 		}
 		c.rules = append(c.rules, &Rule{
 			Name:     cfg.Name,

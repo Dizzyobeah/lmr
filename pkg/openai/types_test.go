@@ -111,3 +111,70 @@ func TestChatCompletionRequestUnmarshalArrayContent(t *testing.T) {
 		t.Errorf("Content = %q, want hi", req.Messages[0].Content)
 	}
 }
+
+// TestChatCompletionRequestPlanMode mirrors a realistic OpenCode plan-mode
+// request: a system-reminder, array-shaped content across system/user/assistant/
+// tool roles (the shape that previously failed with "cannot unmarshal array into
+// ...messages.content of type string"), an image part, and a tools array. It
+// asserts the whole request decodes without error and that text/images/tool
+// fields are preserved.
+func TestChatCompletionRequestPlanMode(t *testing.T) {
+	const in = `{
+		"model": "auto",
+		"messages": [
+			{"role": "system", "content": [{"type": "text", "text": "You are in plan mode."}]},
+			{"role": "user", "content": [
+				{"type": "text", "text": "Review this"},
+				{"type": "image_url", "image_url": {"url": "data:image/png;base64,ZZZ"}}
+			]},
+			{"role": "assistant", "content": [{"type": "text", "text": "Here is the plan"}], "tool_calls": [
+				{"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{\"path\":\"main.go\"}"}}
+			]},
+			{"role": "tool", "tool_call_id": "call_1", "content": [{"type": "text", "text": "file contents"}]}
+		],
+		"tools": [
+			{"type": "function", "function": {"name": "read", "description": "read a file", "parameters": {"type": "object"}}}
+		]
+	}`
+
+	var req ChatCompletionRequest
+	if err := json.Unmarshal([]byte(in), &req); err != nil {
+		t.Fatalf("unexpected error decoding plan-mode request: %v", err)
+	}
+
+	if len(req.Messages) != 4 {
+		t.Fatalf("expected 4 messages, got %d", len(req.Messages))
+	}
+
+	if got := req.Messages[0].Content; got != "You are in plan mode." {
+		t.Errorf("system Content = %q", got)
+	}
+
+	user := req.Messages[1]
+	if user.Content != "Review this" {
+		t.Errorf("user Content = %q, want %q", user.Content, "Review this")
+	}
+	if len(user.Images) != 1 || user.Images[0] != "data:image/png;base64,ZZZ" {
+		t.Errorf("user Images = %v", user.Images)
+	}
+
+	assistant := req.Messages[2]
+	if assistant.Content != "Here is the plan" {
+		t.Errorf("assistant Content = %q", assistant.Content)
+	}
+	if len(assistant.ToolCalls) != 1 || assistant.ToolCalls[0].Function.Name != "read" {
+		t.Errorf("assistant ToolCalls = %+v", assistant.ToolCalls)
+	}
+
+	tool := req.Messages[3]
+	if tool.Content != "file contents" {
+		t.Errorf("tool Content = %q", tool.Content)
+	}
+	if tool.ToolCallID != "call_1" {
+		t.Errorf("tool ToolCallID = %q, want call_1", tool.ToolCallID)
+	}
+
+	if len(req.Tools) != 1 || req.Tools[0].Function.Name != "read" {
+		t.Errorf("Tools = %+v", req.Tools)
+	}
+}
