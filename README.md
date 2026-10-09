@@ -175,6 +175,82 @@ router as an OpenAI-compatible provider:
 Select `local-router/auto` in OpenCode. Every request is then routed
 intelligently based on its content — no further model selection required.
 
+### Using with VS Code Chat (BYOK)
+
+VS Code's built-in Chat supports **Bring Your Own Key (BYOK)** through a
+**Custom Endpoint** provider that speaks the OpenAI Chat Completions API — which
+is exactly what the router exposes. This lets you use the router in VS Code Chat
+(Ask and Agent modes) **instead of GitHub Copilot models**, without a Copilot
+plan or GitHub sign-in.
+
+> **Scope:** BYOK replaces the **chat** experience (Ask, Agent, inline chat, and
+> utility tasks). Inline *ghost-text* code completions, semantic search, and
+> embeddings remain Copilot-only features.
+
+**1. Create a router API key.** Start the stack (see
+[Quick Start](#quick-start) or `./start.ps1`), open the admin UI at
+`http://localhost:8080/admin`, sign in as `admin` (with `ADMIN_PASSWORD`), and
+create an `lmr_...` key under **API Keys** (copy it — it's shown once).
+
+**2. Register the router as a Custom Endpoint.** In the Chat view, open the model
+picker → **Manage Language Models** (gear) → **Add Models** → **Custom
+Endpoint**. Choose API type **Chat Completions** and, when
+`chatLanguageModels.json` opens, set:
+
+```json
+[
+  {
+    "name": "Local Router",
+    "vendor": "customendpoint",
+    "apiKey": "${input:lmrApiKey}",
+    "apiType": "chat-completions",
+    "models": [
+      {
+        "id": "auto",
+        "name": "Local Router (auto)",
+        "url": "http://localhost:8080/v1/chat/completions",
+        "toolCalling": true,
+        "vision": true,
+        "streaming": true,
+        "maxInputTokens": 32000,
+        "maxOutputTokens": 4096
+      }
+    ]
+  }
+]
+```
+
+Notes:
+
+- `id: "auto"` matches the router's single virtual model. With
+  `force_routing: true` the id is ignored anyway and each request is routed by
+  content.
+- The default auth sends `Authorization: Bearer <apiKey>`, which the router
+  expects — no custom header needed. Paste the `lmr_...` key when prompted for
+  `${input:lmrApiKey}` (stored in VS Code secret storage).
+- `toolCalling: true` makes the model available in **both** Agent and Ask mode.
+  Agent mode additionally requires the *backend* model to support tool calling;
+  if agent runs misbehave, use Ask mode or set `"toolCalling": false`.
+- `vision: true` lets VS Code send images; the router's vision rule forwards
+  them to `llava:latest`.
+
+Restart VS Code if **Local Router (auto)** does not appear in the picker.
+
+**3. Route utility tasks to the router** (so titles, commit messages, and intent
+detection work without Copilot). In Settings (JSON):
+
+```json
+"chat.utilityModel": "Local Router (auto)",
+"chat.utilitySmallModel": "Local Router (auto)"
+```
+
+**4. Select `Local Router (auto)`** in the chat model picker and start chatting.
+Check the admin **Requests** page to see how each message was routed.
+
+> **Remote VS Code:** if VS Code runs in Remote-WSL, SSH, or a Dev Container,
+> `localhost:8080` points at the remote host, not the machine running the
+> router. Use port forwarding or the router host's IP in `url` instead.
+
 ### Documentation lookups via Context7 (OpenCode MCP)
 
 The router focuses on routing requests to the best model. For up-to-date library
