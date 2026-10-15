@@ -54,14 +54,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    # GPU passthrough (NVIDIA). Docker Desktop exposes the nvidia runtime.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
   # Optional: Prometheus for metrics
   prometheus:

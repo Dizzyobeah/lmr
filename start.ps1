@@ -122,11 +122,11 @@ if (-not $?) { throw "Model sync failed." }
 # 5. Start the stack and refresh Ollama
 # ------------------------------------------------------------------
 Write-Step "Starting stack"
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 if (-not $?) { throw "docker compose up failed." }
 
 # Restart Ollama so it rescans the volume for the freshly synced models.
-docker compose restart ollama | Out-Null
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml restart ollama | Out-Null
 
 # ------------------------------------------------------------------
 # 6. Verify
