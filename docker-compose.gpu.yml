@@ -1,0 +1,12 @@
+# NVIDIA GPU passthrough for Ollama. Opt-in overlay; start.sh / start.ps1 add it
+# automatically when a GPU is present. Manual use:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

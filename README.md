@@ -47,6 +47,11 @@ docker exec -it ollama ollama pull deepseek-coder
 
 5. Access the admin UI at http://localhost:8080/admin
 
+**Linux / GPU vs. CPU:** `./start.sh` prepares `config.yaml` and `data/`, enables the
+NVIDIA overlay only if a GPU and the NVIDIA Container Toolkit are present, and starts the stack.
+Manually: `docker compose up -d` (CPU) or
+`docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d` (NVIDIA GPU).
+
 ### Building from Source
 
 Requirements:
