@@ -577,10 +577,10 @@ func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "text/html")
 	
-	fmt.Fprint(w, `<thead><tr><th>ID</th><th>Name</th><th>Scopes</th><th>Rate Limit</th><th>Usage</th><th>Status</th><th>Actions</th></tr></thead><tbody>`)
+	fmt.Fprint(w, `<thead><tr><th>ID</th><th>Name</th><th>Scopes</th><th>Rate Limit</th><th>Usage</th><th>Last Used</th><th>Status</th><th>Actions</th></tr></thead><tbody>`)
 	
 	if len(keys) == 0 {
-		fmt.Fprint(w, `<tr><td colspan="7">No API keys yet</td></tr>`)
+		fmt.Fprint(w, `<tr><td colspan="8">No API keys yet</td></tr>`)
 	}
 	
 	for _, key := range keys {
@@ -598,6 +598,11 @@ func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
 		if key.RateLimit > 0 {
 			rateLimit = fmt.Sprintf("%d/min", key.RateLimit)
 		}
+
+		lastUsed := "Never"
+		if key.LastUsedAt != nil {
+			lastUsed = key.LastUsedAt.Format("2006-01-02 15:04")
+		}
 		
 		fmt.Fprintf(w, `<tr>
 			<td><code>%s</code></td>
@@ -605,9 +610,10 @@ func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
 			<td>%v</td>
 			<td>%s</td>
 			<td>%d</td>
+			<td>%s</td>
 			<td style="%s">%s</td>
 			<td><button class="btn btn-danger" hx-delete="/admin/api/keys/%s" hx-confirm="Delete this key?" hx-swap="none" hx-on::after-request="document.body.dispatchEvent(new CustomEvent('keyDeleted'))">Delete</button></td>
-		</tr>`, key.ID, key.Name, key.Scopes, rateLimit, key.UsageCount, statusStyle, status, key.ID)
+		</tr>`, key.ID, key.Name, key.Scopes, rateLimit, key.UsageCount, lastUsed, statusStyle, status, key.ID)
 	}
 	
 	fmt.Fprint(w, `</tbody>`)
