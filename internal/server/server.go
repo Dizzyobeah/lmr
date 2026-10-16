@@ -628,31 +628,42 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	
 	routeResult := &classifier.RouteResult{Model: model}
 
-	// Generate embeddings
-	var embeddings []openai.Embedding
+	// Generate embeddings in one batched call
+	embeddings := []openai.Embedding{}
 	var totalTokens int
-	
-	for i, input := range inputs {
+
+	if len(inputs) > 0 {
 		resp, err := s.ollamaClient.Embedding(r.Context(), &ollama.EmbeddingRequest{
-			Model:  model,
-			Prompt: input,
+			Model: model,
+			Input: inputs,
 		})
+		if err == nil && len(resp.Embeddings) != len(inputs) {
+			err = fmt.Errorf("ollama returned %d embeddings for %d inputs", len(resp.Embeddings), len(inputs))
+		}
 		if err != nil {
 			log.Error().Err(err).Msg("Ollama embedding failed")
 			openai.WriteError(w, openai.ErrInternal("Embedding generation failed"))
 			s.recordRequest("/v1/embeddings", routeResult, 0, 0, http.StatusInternalServerError, start)
 			return
 		}
-		
-		embeddings = append(embeddings, openai.Embedding{
-			Object:    "embedding",
-			Index:     i,
-			Embedding: resp.Embedding,
-		})
-		
-		totalTokens += len(input) / 4 // Rough estimate
+
+		for i, vec := range resp.Embeddings {
+			embeddings = append(embeddings, openai.Embedding{
+				Object:    "embedding",
+				Index:     i,
+				Embedding: vec,
+			})
+		}
+
+		totalTokens = resp.PromptEvalCount
+		if totalTokens == 0 {
+			// Some Ollama builds omit prompt_eval_count; fall back to a rough estimate.
+			for _, input := range inputs {
+				totalTokens += len(input) / 4
+			}
+		}
 	}
-	
+
 	openaiResp := &openai.EmbeddingResponse{
 		Object: "list",
 		Data:   embeddings,
