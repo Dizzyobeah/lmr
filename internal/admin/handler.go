@@ -3,6 +3,8 @@ package admin
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -347,23 +349,47 @@ func (h *Handler) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLogin processes login requests.
+// checkCredentials verifies both username and password in constant time.
+// The configured password may be a bcrypt hash or plain text.
+func (h *Handler) checkCredentials(username, password string) bool {
+	userOK := subtle.ConstantTimeCompare([]byte(username), []byte(h.config.Username)) == 1
+	var passOK bool
+	if strings.HasPrefix(h.config.Password, "$2") { // bcrypt hash
+		passOK = crypto.VerifyPassword(password, h.config.Password)
+	} else {
+		a, b := sha256.Sum256([]byte(password)), sha256.Sum256([]byte(h.config.Password))
+		passOK = subtle.ConstantTimeCompare(a[:], b[:]) == 1
+	}
+	return userOK && passOK
+}
+
 func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	
-	if username != h.config.Username || !crypto.VerifyPassword(password, h.config.Password) {
-		// For simplicity, do direct comparison if password isn't hashed
-		if password != h.config.Password {
-			http.Redirect(w, r, h.config.Path+"/login?error=1", http.StatusFound)
-			return
-		}
+	if !h.checkCredentials(username, password) {
+		// ponytail: fixed delay slows brute force; add per-IP lockout if exposed beyond a LAN
+		time.Sleep(500 * time.Millisecond)
+		http.Redirect(w, r, h.config.Path+"/login?error=1", http.StatusFound)
+		return
 	}
 	
 	// Create session
-	token, _ := crypto.GenerateSecureToken(32)
-	expiry := time.Now().Add(h.config.SessionTTL)
+	token, err := crypto.GenerateSecureToken(32)
+	if err != nil {
+		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		return
+	}
+	now := time.Now()
+	expiry := now.Add(h.config.SessionTTL)
 	
 	h.sessionsMu.Lock()
+	// Drop expired sessions so the map doesn't grow without bound.
+	for t, exp := range h.sessions {
+		if now.After(exp) {
+			delete(h.sessions, t)
+		}
+	}
 	h.sessions[token] = expiry
 	h.sessionsMu.Unlock()
 	
