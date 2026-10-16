@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -53,7 +54,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		
 		// Check rate limit
 		if !rl.allow(key.ID, key.RateLimit) {
-			w.Header().Set("X-RateLimit-Limit", string(rune(key.RateLimit)))
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(key.RateLimit))
 			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.Header().Set("Retry-After", "60")
 			openai.WriteError(w, openai.ErrRateLimit("Rate limit exceeded"))
