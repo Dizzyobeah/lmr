@@ -588,6 +588,7 @@ func (s *Server) handleCompletionStream(w http.ResponseWriter, r *http.Request, 
 
 // handleEmbeddings handles POST /v1/embeddings
 func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	var req openai.EmbeddingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		openai.WriteError(w, openai.ErrInvalidRequest("Invalid JSON: "+err.Error()))
@@ -618,17 +619,15 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		if found, ok := s.modelCache.FindFirstAvailable(embeddingModels); ok {
 			model = found
 		} else {
-			// Fall back to any model
-			models := s.modelCache.GetModelNames()
-			if len(models) > 0 {
-				model = models[0]
-			} else {
-				openai.WriteError(w, openai.ErrModelNotFound("No embedding models available"))
-				return
-			}
+			// Never fall back to a chat model: Ollama rejects embeddings for it.
+			openai.WriteError(w, openai.ErrModelNotFound("No embedding model installed; pull nomic-embed-text"))
+			s.recordRequest("/v1/embeddings", nil, 0, 0, http.StatusNotFound, start)
+			return
 		}
 	}
 	
+	routeResult := &classifier.RouteResult{Model: model}
+
 	// Generate embeddings
 	var embeddings []openai.Embedding
 	var totalTokens int
@@ -641,6 +640,7 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Error().Err(err).Msg("Ollama embedding failed")
 			openai.WriteError(w, openai.ErrInternal("Embedding generation failed"))
+			s.recordRequest("/v1/embeddings", routeResult, 0, 0, http.StatusInternalServerError, start)
 			return
 		}
 		
@@ -665,6 +665,7 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(openaiResp)
+	s.recordRequest("/v1/embeddings", routeResult, totalTokens, 0, http.StatusOK, start)
 }
 
 // handleListModels handles GET /v1/models
