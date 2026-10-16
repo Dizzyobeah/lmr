@@ -256,6 +256,11 @@ Check the admin **Requests** page to see how each message was routed.
 > `localhost:8080` points at the remote host, not the machine running the
 > router. Use port forwarding or the router host's IP in `url` instead.
 
+**Monitoring (optional):** `docker compose --profile monitoring up -d` adds Prometheus
+and Grafana. Grafana's admin password defaults to `admin`; set `GRAFANA_ADMIN_PASSWORD`
+(in your shell or `.env`) before first start to change it. Image versions are pinned in
+`docker-compose.yml`; bump them deliberately.
+
 ### Documentation lookups via Context7 (OpenCode MCP)
 
 The router focuses on routing requests to the best model. For up-to-date library
