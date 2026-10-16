@@ -6,7 +6,7 @@
     <title>Local Model Router - Admin</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/alpinejs@3.13.5" defer></script>
-    <link rel="stylesheet" href="/admin/theme.css">
+    <link rel="stylesheet" href="{{.AdminPath}}/theme.css">
     <style>
         .dashboard {
             display: grid;
@@ -14,6 +14,7 @@
             gap: var(--space-2xl);
         }
         .tab-card { margin-top: var(--space-2xl); }
+        .card-head h2 { margin: 0; }
         .card-head {
             display: flex;
             justify-content: space-between;
@@ -105,8 +106,8 @@
         <!-- API Keys Tab -->
         <div x-show="currentTab === 'keys'" class="card tab-card">
             <div class="card-head">
-                <h2 style="margin: 0;">API keys</h2>
-                <button class="btn btn-primary" @click="showCreateKeyModal = true">Create Key</button>
+                <h2>API keys</h2>
+                <button class="btn" @click="showCreateKeyModal = true">Create Key</button>
             </div>
             <table hx-get="/admin/api/keys" hx-trigger="load, keyCreated from:body, keyDeleted from:body" hx-swap="innerHTML">
                 <thead>
@@ -154,7 +155,7 @@
         <div class="modal-content" @click.away="showCreateKeyModal = false">
             <div class="modal-header">
                 <h3>Create API Key</h3>
-                <button class="close-btn" @click="showCreateKeyModal = false">&times;</button>
+                <button class="close-btn" aria-label="Close" @click="showCreateKeyModal = false">&times;</button>
             </div>
             <form hx-post="/admin/api/keys" hx-swap="none" @htmx:after-request="handleKeyCreated($event)">
                 <div class="form-group">
@@ -174,7 +175,7 @@
                         <option value="models">Models</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Create Key</button>
+                <button type="submit" class="btn btn-block">Create Key</button>
             </form>
         </div>
     </div>
@@ -184,13 +185,13 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>API Key Created</h3>
-                <button class="close-btn" @click="newAPIKey = null">&times;</button>
+                <button class="close-btn" aria-label="Close" @click="newAPIKey = null">&times;</button>
             </div>
             <p class="text-warning">
                 Make sure to copy your API key now. You won't be able to see it again!
             </p>
             <div class="code-block" x-text="newAPIKey"></div>
-            <button class="btn btn-primary" style="width: 100%;" @click="copyToClipboard(newAPIKey); newAPIKey = null">
+            <button class="btn btn-block" @click="copyToClipboard(newAPIKey); newAPIKey = null">
                 Copy to Clipboard
             </button>
         </div>

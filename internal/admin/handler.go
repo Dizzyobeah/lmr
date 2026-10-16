@@ -178,7 +178,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	w.Header().Set("Content-Type", "text/html")
-	tmpl.Execute(w, nil)
+	tmpl.Execute(w, struct{ AdminPath string }{h.config.Path})
 }
 
 // chatPageData is the template data for the chat testing UI.
@@ -341,8 +341,14 @@ func (h *Handler) handleLoginPage(w http.ResponseWriter, r *http.Request) {
     <main class="auth">
     <form class="card" method="POST">
         <h1>Sign in</h1>
-        <input type="text" name="username" placeholder="Username" required>
-        <input type="password" name="password" placeholder="Password" required>
+        <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+        </div>
         <button class="btn" type="submit">Sign in</button>
     </form>
     </main>
@@ -420,9 +426,9 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, `
-		<div style="display: flex; align-items: center; margin-bottom: var(--space-xl);">
+		<div class="status-row">
 			<span class="status-indicator %s"></span>
-			<span style="font-size: var(--text-display-md);">%s</span>
+			<span class="status-text">%s</span>
 		</div>
 		<div class="stat-grid">
 			<div class="stat-item">
@@ -529,13 +535,13 @@ func (h *Handler) handleModelUsage(w http.ResponseWriter, r *http.Request) {
 	for _, mc := range sorted[:min(5, len(sorted))] {
 		pct := float64(mc.Count) / float64(len(h.recentRequests)) * 100
 		fmt.Fprintf(w, `
-			<div style="margin-bottom: var(--space-md);">
-				<div style="display: flex; justify-content: space-between; margin-bottom: var(--space-xs);">
+			<div class="bar-row">
+				<div class="bar-label">
 					<span>%s</span>
 					<span>%d (%.0f%%)</span>
 				</div>
-				<div style="background: var(--color-hairline); border-radius: var(--radius-sm); overflow: hidden;">
-					<div style="width: %.0f%%; background: var(--color-primary); height: 8px;"></div>
+				<div class="bar">
+					<div class="bar-fill" style="width: %.0f%%;"></div>
 				</div>
 			</div>
 		`, html.EscapeString(mc.Model), mc.Count, pct, pct)
@@ -562,7 +568,7 @@ func (h *Handler) handleClassificationStats(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	
-	fmt.Fprint(w, `<div style="display: flex; flex-wrap: wrap; gap: var(--space-sm);">`)
+	fmt.Fprint(w, `<div class="badge-row">`)
 	for _, cat := range categories {
 		count := counts[cat]
 		pct := float64(count) / float64(total) * 100

@@ -67,21 +67,23 @@ var (
 )
 
 func TestPagesUseTheme(t *testing.T) {
-	h := NewHandler(&config.AdminConfig{Path: "/admin"}, nil, ollama.NewModelCache(nil, 0), nil, nil)
+	// A non-default admin.path: the stylesheet must still resolve to {Path}/theme.css.
+	// The login page uses a relative href, which resolves from {Path}/login.
+	h := NewHandler(&config.AdminConfig{Path: "/ops/admin"}, nil, ollama.NewModelCache(nil, 0), nil, nil)
 	tests := []struct {
-		name string
-		fn   http.HandlerFunc
+		name     string
+		fn       http.HandlerFunc
+		wantHref string
 	}{
-		{"index", h.handleIndex},
-		{"chat", h.handleChatPage},
-		{"login", h.handleLoginPage},
+		{"index", h.handleIndex, "/ops/admin/theme.css"},
+		{"chat", h.handleChatPage, "/ops/admin/theme.css"},
+		{"login", h.handleLoginPage, "theme.css"},
 	}
-	linkRe := regexp.MustCompile(`<link rel="stylesheet" href="[^"]*theme\.css"`)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body := serve(t, tt.fn)
-			if !linkRe.MatchString(body) {
-				t.Error("no stylesheet link to theme.css")
+			if want := `<link rel="stylesheet" href="` + tt.wantHref + `"`; !strings.Contains(body, want) {
+				t.Errorf("body missing %s", want)
 			}
 			if n := strings.Count(body, `class="brand-ribbon"`); n != 1 {
 				t.Errorf("brand-ribbon count = %d, want 1", n)

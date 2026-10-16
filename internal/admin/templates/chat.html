@@ -74,7 +74,7 @@
 
         .empty-hint {
             margin: auto;
-            color: var(--color-body);
+            color: var(--color-body-strong);
             font-size: var(--text-caption);
             text-align: center;
         }
@@ -118,7 +118,8 @@
             font-size: var(--text-caption);
         }
 
-        .meta-row .label { color: var(--color-body); }
+        .meta-row .label { color: var(--color-body-strong); }
+        .meta-body .empty-hint { margin-top: var(--space-xl); }
         .meta-row .value { font-weight: 500; text-align: right; overflow-wrap: anywhere; }
 
         .error-banner {
@@ -138,7 +139,8 @@
             .layout { grid-template-columns: 1fr; overflow: visible; }
             .messages { min-height: 50vh; }
             .composer { flex-wrap: wrap; }
-            .composer select { width: 100%; }
+            .composer select, .composer textarea, .composer .btn { flex: 1 1 100%; width: 100%; }
+            .composer .btn { min-height: 44px; }
         }
     </style>
 </head>
@@ -201,7 +203,7 @@
             <h2>Last routing decision</h2>
             <div class="meta-body">
                 <template x-if="!lastMeta">
-                    <div class="empty-hint" style="margin-top: var(--space-xl);">No requests yet</div>
+                    <div class="empty-hint">No requests yet</div>
                 </template>
                 <template x-if="lastMeta">
                     <div>

@@ -3,6 +3,9 @@
 	--color-primary: #000000;
 	--color-ink: #000000;
 	--color-body: #999999;
+	/* Darker body grey for small functional text (labels, table headers,
+	   empty states): 5.7:1 on canvas, 4.8:1 on hairline. --color-body is 2.8:1. */
+	--color-body-strong: #666666;
 	--color-canvas: #ffffff;
 	--color-canvas-dark: #010120;
 	--color-hairline: #ebebeb;
@@ -66,6 +69,13 @@ body {
 strong, b { font-weight: 500; }
 [x-cloak] { display: none !important; }
 a { color: inherit; }
+
+/* Keyboard focus ring: ink on light surfaces. Tab pills sit in an
+   overflow container, so their ring is inset; white on the active (black) pill. */
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.nav-bar :focus-visible { outline-color: var(--color-on-dark); }
+.pill-group a:focus-visible { outline-color: var(--color-primary); outline-offset: -4px; }
+.pill-group a.active:focus-visible { outline-color: var(--color-on-dark); }
 
 h1, h2, h3 {
 	font-family: var(--font-sans);
@@ -192,13 +202,12 @@ h2, h3 { font-size: var(--text-display-md); letter-spacing: -0.22px; }
 	white-space: nowrap;
 }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-secondary, .btn-danger {
+.btn-block { width: 100%; }
+.btn-danger {
 	background: var(--color-canvas);
-	color: var(--color-ink);
+	color: var(--color-error);
 	border-color: var(--color-hairline);
-	border-radius: var(--radius-xs);
 }
-.btn-danger { color: var(--color-error); border-radius: var(--radius-sm); }
 
 /* text-input */
 input, select, textarea {
@@ -212,11 +221,10 @@ input, select, textarea {
 	width: 100%;
 }
 input:focus, select:focus, textarea:focus {
-	outline: none;
 	border-color: var(--color-primary);
 }
 .form-group { margin-bottom: var(--space-lg); }
-.form-group label, .field-label {
+.form-group label {
 	display: block;
 	margin-bottom: var(--space-xs);
 	font-family: var(--font-mono);
@@ -224,7 +232,7 @@ input:focus, select:focus, textarea:focus {
 	font-weight: 500;
 	letter-spacing: 0.55px;
 	text-transform: uppercase;
-	color: var(--color-body);
+	color: var(--color-body-strong);
 }
 
 /* Data table */
@@ -234,7 +242,7 @@ th {
 	text-transform: uppercase;
 	font-size: var(--text-mono-eyebrow);
 	background: var(--color-hairline);
-	color: var(--color-body);
+	color: var(--color-body-strong);
 	padding: var(--space-md) var(--space-lg);
 	font-weight: 500;
 	letter-spacing: 0.55px;
@@ -301,14 +309,15 @@ code { font-family: var(--font-mono); font-size: var(--text-caption); }
 .close-btn {
 	background: none;
 	border: none;
-	color: var(--color-body);
+	color: var(--color-ink);
 	font-size: var(--text-display-md);
+	line-height: 1;
+	padding: 0 var(--space-xs);
 	cursor: pointer;
 }
 
 /* ex-empty-state-card and utilities */
-.empty-state { font-size: var(--text-caption); color: var(--color-body); }
-.muted { color: var(--color-body); }
+.empty-state { font-size: var(--text-caption); color: var(--color-body-strong); }
 .text-success { color: var(--color-success); }
 .text-warning { color: var(--color-warning); }
 .text-error { color: var(--color-error); }
@@ -321,8 +330,16 @@ code { font-family: var(--font-mono); font-size: var(--text-caption); }
 	margin-right: var(--space-sm);
 }
 .status-healthy { background: var(--color-success); }
-.status-degraded { background: var(--color-warning); }
 .status-unhealthy { background: var(--color-error); }
+
+/* Dashboard fragments (handler.go) */
+.status-row { display: flex; align-items: center; margin-bottom: var(--space-xl); }
+.status-text { font-size: var(--text-display-md); }
+.bar-row { margin-bottom: var(--space-md); }
+.bar-label { display: flex; justify-content: space-between; gap: var(--space-sm); margin-bottom: var(--space-xs); }
+.bar { background: var(--color-hairline); border-radius: var(--radius-sm); overflow: hidden; }
+.bar-fill { background: var(--color-primary); height: 8px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .loading { animation: pulse 1.5s infinite; }
@@ -331,6 +348,7 @@ code { font-family: var(--font-mono); font-size: var(--text-caption); }
 .auth { display: flex; justify-content: center; padding: var(--space-section) var(--gutter); }
 .auth .card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: var(--space-lg); }
 .auth .btn { width: 100%; }
+.auth .form-group { margin-bottom: 0; }
 
 @media (max-width: 478px) {
 	:root { --gutter: var(--space-lg); }
