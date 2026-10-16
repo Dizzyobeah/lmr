@@ -289,7 +289,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		Messages: convertMessages(req.Messages),
 		Stream:   req.Stream,
 		Tools:    convertTools(req.Tools),
-		Options:  buildOllamaOptions(&req),
+		Options:  buildOllamaOptions(&req, s.config.Ollama.NumCtx),
 	}
 	
 	// Handle streaming vs non-streaming
@@ -910,7 +910,7 @@ func convertToolCallDeltas(calls []ollama.ToolCall) []openai.ToolCallDelta {
 	return result
 }
 
-func buildOllamaOptions(req *openai.ChatCompletionRequest) map[string]interface{} {
+func buildOllamaOptions(req *openai.ChatCompletionRequest, numCtx int) map[string]interface{} {
 	opts := make(map[string]interface{})
 	
 	if req.Temperature != nil {
@@ -934,8 +934,8 @@ func buildOllamaOptions(req *openai.ChatCompletionRequest) map[string]interface{
 	
 	// Agent clients (e.g. OpenCode) send large system prompts and tool schemas.
 	// Ollama's default context window is small and silently truncates them, so
-	// raise it to a sane default unless the caller specified otherwise.
-	opts["num_ctx"] = 32768
+	// set it from the ollama.num_ctx config value.
+	opts["num_ctx"] = numCtx
 	
 	return opts
 }

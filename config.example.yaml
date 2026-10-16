@@ -43,6 +43,11 @@ ollama:
   # How often to refresh the available models list
   refresh_interval: 5m
 
+  # Context window (num_ctx) sent to Ollama on chat requests. Lower it on
+  # CPU-only hosts for speed. Clients must not send more tokens than this,
+  # or Ollama silently truncates the prompt. Env: OLLAMA_NUM_CTX
+  num_ctx: 32768
+
 # ============================================================
 # Authentication Configuration
 # ============================================================
