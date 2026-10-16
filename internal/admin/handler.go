@@ -6,6 +6,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"html"
 	"html/template"
 	"net/http"
 	"sort"
@@ -486,7 +487,7 @@ func (h *Handler) handleModels(w http.ResponseWriter, r *http.Request) {
 	for _, m := range models {
 		sizeGB := float64(m.Size) / (1024 * 1024 * 1024)
 		fmt.Fprintf(w, `<tr><td>%s</td><td>%.1f GB</td><td>%s</td><td>%s</td><td>%s</td></tr>`,
-			m.Name, sizeGB, m.Details.Family, m.Details.QuantizationLevel, m.ModifiedAt.Format("2006-01-02 15:04"))
+			html.EscapeString(m.Name), sizeGB, html.EscapeString(m.Details.Family), html.EscapeString(m.Details.QuantizationLevel), m.ModifiedAt.Format("2006-01-02 15:04"))
 	}
 	fmt.Fprint(w, `</tbody>`)
 }
@@ -534,7 +535,7 @@ func (h *Handler) handleModelUsage(w http.ResponseWriter, r *http.Request) {
 					<div style="width: %.0f%%; background: var(--accent); height: 8px;"></div>
 				</div>
 			</div>
-		`, mc.Model, mc.Count, pct, pct)
+		`, html.EscapeString(mc.Model), mc.Count, pct, pct)
 	}
 }
 
@@ -613,7 +614,7 @@ func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
 			<td>%s</td>
 			<td style="%s">%s</td>
 			<td><button class="btn btn-danger" hx-delete="/admin/api/keys/%s" hx-confirm="Delete this key?" hx-swap="none" hx-on::after-request="document.body.dispatchEvent(new CustomEvent('keyDeleted'))">Delete</button></td>
-		</tr>`, key.ID, key.Name, key.Scopes, rateLimit, key.UsageCount, lastUsed, statusStyle, status, key.ID)
+		</tr>`, html.EscapeString(key.ID), html.EscapeString(key.Name), html.EscapeString(fmt.Sprint(key.Scopes)), rateLimit, key.UsageCount, lastUsed, statusStyle, status, html.EscapeString(key.ID))
 	}
 	
 	fmt.Fprint(w, `</tbody>`)
@@ -692,7 +693,7 @@ func (h *Handler) handleRequests(w http.ResponseWriter, r *http.Request) {
 			<td>%d</td>
 			<td>%dms</td>
 			<td style="%s">%d</td>
-		</tr>`, req.Time.Format("15:04:05"), req.Endpoint, req.Model, req.Category, req.Category, req.Tokens, req.LatencyMs, statusStyle, req.StatusCode)
+		</tr>`, req.Time.Format("15:04:05"), html.EscapeString(req.Endpoint), html.EscapeString(req.Model), html.EscapeString(req.Category), html.EscapeString(req.Category), req.Tokens, req.LatencyMs, statusStyle, req.StatusCode)
 	}
 	
 	fmt.Fprint(w, `</tbody>`)
