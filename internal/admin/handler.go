@@ -92,6 +92,11 @@ func (h *Handler) Router() chi.Router {
 	// Chat testing UI
 	r.Get("/chat", h.handleChatPage)
 	
+	// Shared stylesheet (served without auth; static, no secrets)
+	r.Get("/theme.css", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFileFS(w, r, templatesFS, "templates/theme.css")
+	})
+	
 	// API endpoints for htmx
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/status", h.handleStatus)
@@ -138,8 +143,8 @@ func (h *Handler) RecordRequest(req RecentRequest) {
 // authMiddleware checks admin authentication.
 func (h *Handler) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow login page
-		if r.URL.Path == h.config.Path+"/login" {
+		// Allow login page and its stylesheet (exact matches only)
+		if r.URL.Path == h.config.Path+"/login" || r.URL.Path == h.config.Path+"/theme.css" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -325,24 +330,22 @@ func (h *Handler) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`<!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Local Model Router</title>
-    <style>
-        body { font-family: sans-serif; background: #1a1a2e; color: #eaeaea; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .login-form { background: #16213e; padding: 30px; border-radius: 12px; width: 300px; }
-        .login-form h1 { margin: 0 0 20px; font-size: 1.5rem; color: #e94560; }
-        .login-form input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #374151; background: #0f3460; color: #eaeaea; border-radius: 6px; box-sizing: border-box; }
-        .login-form button { width: 100%; padding: 10px; background: #e94560; color: white; border: none; border-radius: 6px; cursor: pointer; }
-        .login-form button:hover { background: #ff6b6b; }
-        .error { color: #ef4444; margin-bottom: 15px; }
-    </style>
+    <link rel="stylesheet" href="theme.css">
 </head>
 <body>
-    <form class="login-form" method="POST">
-        <h1>Admin Login</h1>
+    <header class="nav-bar"><span class="nav-brand">Local Model Router</span></header>
+    <div class="brand-ribbon"></div>
+    <main class="auth">
+    <form class="card" method="POST">
+        <h1>Sign in</h1>
         <input type="text" name="username" placeholder="Username" required>
         <input type="password" name="password" placeholder="Password" required>
-        <button type="submit">Login</button>
+        <button class="btn" type="submit">Sign in</button>
     </form>
+    </main>
 </body>
 </html>`))
 }
@@ -417,9 +420,9 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, `
-		<div style="display: flex; align-items: center; margin-bottom: 20px;">
+		<div style="display: flex; align-items: center; margin-bottom: var(--space-xl);">
 			<span class="status-indicator %s"></span>
-			<span style="font-size: 1.25rem;">%s</span>
+			<span style="font-size: var(--text-display-md);">%s</span>
 		</div>
 		<div class="stat-grid">
 			<div class="stat-item">
@@ -519,20 +522,20 @@ func (h *Handler) handleModelUsage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	
 	if len(sorted) == 0 {
-		w.Write([]byte(`<div style="color: var(--text-secondary);">No data yet</div>`))
+		w.Write([]byte(`<div class="empty-state">No data yet</div>`))
 		return
 	}
 	
 	for _, mc := range sorted[:min(5, len(sorted))] {
 		pct := float64(mc.Count) / float64(len(h.recentRequests)) * 100
 		fmt.Fprintf(w, `
-			<div style="margin-bottom: 10px;">
-				<div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+			<div style="margin-bottom: var(--space-md);">
+				<div style="display: flex; justify-content: space-between; margin-bottom: var(--space-xs);">
 					<span>%s</span>
 					<span>%d (%.0f%%)</span>
 				</div>
-				<div style="background: var(--bg-card); border-radius: 4px; overflow: hidden;">
-					<div style="width: %.0f%%; background: var(--accent); height: 8px;"></div>
+				<div style="background: var(--color-hairline); border-radius: var(--radius-sm); overflow: hidden;">
+					<div style="width: %.0f%%; background: var(--color-primary); height: 8px;"></div>
 				</div>
 			</div>
 		`, html.EscapeString(mc.Model), mc.Count, pct, pct)
@@ -555,11 +558,11 @@ func (h *Handler) handleClassificationStats(w http.ResponseWriter, r *http.Reque
 	
 	total := len(h.recentRequests)
 	if total == 0 {
-		w.Write([]byte(`<div style="color: var(--text-secondary);">No data yet</div>`))
+		w.Write([]byte(`<div class="empty-state">No data yet</div>`))
 		return
 	}
 	
-	fmt.Fprint(w, `<div style="display: flex; flex-wrap: wrap; gap: 10px;">`)
+	fmt.Fprint(w, `<div style="display: flex; flex-wrap: wrap; gap: var(--space-sm);">`)
 	for _, cat := range categories {
 		count := counts[cat]
 		pct := float64(count) / float64(total) * 100
@@ -586,13 +589,13 @@ func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
 	
 	for _, key := range keys {
 		status := "Active"
-		statusStyle := "color: var(--success);"
+		statusStyle := "text-success"
 		if !key.Enabled {
 			status = "Disabled"
-			statusStyle = "color: var(--error);"
+			statusStyle = "text-error"
 		} else if key.IsExpired() {
 			status = "Expired"
-			statusStyle = "color: var(--warning);"
+			statusStyle = "text-warning"
 		}
 		
 		rateLimit := "Unlimited"
@@ -612,7 +615,7 @@ func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
 			<td>%s</td>
 			<td>%d</td>
 			<td>%s</td>
-			<td style="%s">%s</td>
+			<td class="%s">%s</td>
 			<td><button class="btn btn-danger" hx-delete="/admin/api/keys/%s" hx-confirm="Delete this key?" hx-swap="none" hx-on::after-request="document.body.dispatchEvent(new CustomEvent('keyDeleted'))">Delete</button></td>
 		</tr>`, html.EscapeString(key.ID), html.EscapeString(key.Name), html.EscapeString(fmt.Sprint(key.Scopes)), rateLimit, key.UsageCount, lastUsed, statusStyle, status, html.EscapeString(key.ID))
 	}
@@ -682,7 +685,7 @@ func (h *Handler) handleRequests(w http.ResponseWriter, r *http.Request) {
 	for _, req := range requests[:min(100, len(requests))] {
 		statusStyle := ""
 		if req.StatusCode >= 400 {
-			statusStyle = "color: var(--error);"
+			statusStyle = "text-error"
 		}
 		
 		fmt.Fprintf(w, `<tr>
@@ -692,7 +695,7 @@ func (h *Handler) handleRequests(w http.ResponseWriter, r *http.Request) {
 			<td><span class="badge badge-%s">%s</span></td>
 			<td>%d</td>
 			<td>%dms</td>
-			<td style="%s">%d</td>
+			<td class="%s">%d</td>
 		</tr>`, req.Time.Format("15:04:05"), html.EscapeString(req.Endpoint), html.EscapeString(req.Model), html.EscapeString(req.Category), html.EscapeString(req.Category), req.Tokens, req.LatencyMs, statusStyle, req.StatusCode)
 	}
 	
