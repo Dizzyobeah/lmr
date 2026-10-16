@@ -81,6 +81,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ollama.timeout", "120s")
 	v.SetDefault("ollama.max_connections", 100)
 	v.SetDefault("ollama.refresh_interval", "5m")
+	v.SetDefault("ollama.num_ctx", 32768)
 
 	// Auth defaults
 	v.SetDefault("auth.enabled", true)

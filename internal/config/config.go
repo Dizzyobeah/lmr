@@ -65,6 +65,9 @@ type OllamaConfig struct {
 
 	// RefreshInterval is how often to refresh the model list.
 	RefreshInterval time.Duration `mapstructure:"refresh_interval"`
+
+	// NumCtx is the context window (num_ctx) sent to Ollama on chat requests.
+	NumCtx int `mapstructure:"num_ctx"`
 }
 
 // AuthConfig contains authentication settings.
@@ -201,6 +204,7 @@ func DefaultConfig() *Config {
 			Timeout:         120 * time.Second,
 			MaxConnections:  100,
 			RefreshInterval: 5 * time.Minute,
+			NumCtx:          32768,
 		},
 		Auth: AuthConfig{
 			Enabled: true,
@@ -271,6 +275,9 @@ func (c *Config) Validate() error {
 	// Ollama validation
 	if c.Ollama.Endpoint == "" {
 		errors = append(errors, "ollama.endpoint is required")
+	}
+	if c.Ollama.NumCtx <= 0 {
+		errors = append(errors, "ollama.num_ctx must be greater than 0")
 	}
 
 	// Auth validation

@@ -227,6 +227,8 @@ Endpoint**. Choose API type **Chat Completions** and, when
 
 Notes:
 
+- Keep `maxInputTokens` at or below the router's `ollama.num_ctx` (default
+  32768), or Ollama silently truncates the prompt.
 - `id: "auto"` matches the router's single virtual model. With
   `force_routing: true` the id is ignored anyway and each request is routed by
   content.
