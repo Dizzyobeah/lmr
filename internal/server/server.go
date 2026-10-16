@@ -364,6 +364,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request, ollama
 		return
 	}
 	
+	clearWriteDeadline(w)
 	metrics.StreamingRequests.Inc()
 	defer metrics.StreamingRequests.Dec()
 	
@@ -527,6 +528,7 @@ func (s *Server) handleCompletionStream(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	
+	clearWriteDeadline(w)
 	metrics.StreamingRequests.Inc()
 	defer metrics.StreamingRequests.Dec()
 	
@@ -938,6 +940,14 @@ func buildOllamaOptions(req *openai.ChatCompletionRequest, numCtx int) map[strin
 	opts["num_ctx"] = numCtx
 	
 	return opts
+}
+
+// clearWriteDeadline lifts server.write_timeout for a streamed response, which
+// would otherwise be cut off mid-stream when generation is slow (e.g. on CPU).
+func clearWriteDeadline(w http.ResponseWriter) {
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		log.Warn().Err(err).Msg("Could not clear write deadline for streaming response")
+	}
 }
 
 func generateID(prefix string) string {

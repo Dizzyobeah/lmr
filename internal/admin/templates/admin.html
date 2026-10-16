@@ -200,10 +200,16 @@
     <script>
         function adminApp() {
             return {
-                currentTab: 'dashboard',
+                // Persist the selected tab in the URL hash so a refresh stays on it.
+                currentTab: ['dashboard', 'models', 'keys', 'requests'].includes(location.hash.slice(1))
+                    ? location.hash.slice(1) : 'dashboard',
                 showCreateKeyModal: false,
                 newAPIKey: null,
                 
+                init() {
+                    this.$watch('currentTab', tab => history.replaceState(null, '', '#' + tab));
+                },
+
                 handleKeyCreated(event) {
                     if (event.detail.successful) {
                         const response = JSON.parse(event.detail.xhr.responseText);

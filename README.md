@@ -214,7 +214,7 @@ Endpoint**. Choose API type **Chat Completions** and, when
         "id": "auto",
         "name": "Local Router (auto)",
         "url": "http://localhost:8080/v1/chat/completions",
-        "toolCalling": true,
+        "toolCalling": false,
         "vision": true,
         "streaming": true,
         "maxInputTokens": 32000,
@@ -235,9 +235,16 @@ Notes:
 - The default auth sends `Authorization: Bearer <apiKey>`, which the router
   expects — no custom header needed. Paste the `lmr_...` key when prompted for
   `${input:lmrApiKey}` (stored in VS Code secret storage).
-- `toolCalling: true` makes the model available in **both** Agent and Ask mode.
-  Agent mode additionally requires the *backend* model to support tool calling;
-  if agent runs misbehave, use Ask mode or set `"toolCalling": false`.
+- `toolCalling: false` keeps the model to **Ask** mode. Set it to `true` to also
+  offer it in Agent mode, which needs a backend model that supports tool calling
+  and a prompt that fits the context window (see below).
+- **"No response was returned" with `compaction_static_context_blocked` in the
+  Output panel (GitHub Copilot Chat):** VS Code never sent the request because
+  Agent mode's system prompt plus tool definitions (including MCP servers) exceed
+  `maxInputTokens` minus `maxOutputTokens`. Use Ask mode, or turn off unneeded
+  tools/MCP servers. Don't raise `maxInputTokens` above 32768: the router sets
+  Ollama's `num_ctx` to 32768, so larger prompts are truncated (and very slow on
+  CPU).
 - `vision: true` lets VS Code send images; the router's vision rule forwards
   them to `llava:latest`.
 
@@ -257,6 +264,11 @@ Check the admin **Requests** page to see how each message was routed.
 > **Remote VS Code:** if VS Code runs in Remote-WSL, SSH, or a Dev Container,
 > `localhost:8080` points at the remote host, not the machine running the
 > router. Use port forwarding or the router host's IP in `url` instead.
+
+**Monitoring (optional):** `docker compose --profile monitoring up -d` adds Prometheus
+and Grafana. Grafana's admin password defaults to `admin`; set `GRAFANA_ADMIN_PASSWORD`
+(in your shell or `.env`) before first start to change it. Image versions are pinned in
+`docker-compose.yml`; bump them deliberately.
 
 ### Documentation lookups via Context7 (OpenCode MCP)
 
