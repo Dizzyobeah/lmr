@@ -51,3 +51,5 @@ config.yaml
 docker-compose.override.yml
 .env
 .opencode/*
+factory/jobs/*
+.claude/settings.local.json
