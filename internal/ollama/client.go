@@ -134,13 +134,14 @@ type ChatResponse struct {
 
 // EmbeddingRequest is a request to the Ollama embedding endpoint.
 type EmbeddingRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
+	Model string   `json:"model"`
+	Input []string `json:"input"`
 }
 
 // EmbeddingResponse is a response from the Ollama embedding endpoint.
 type EmbeddingResponse struct {
-	Embedding []float64 `json:"embedding"`
+	Embeddings      [][]float64 `json:"embeddings"`
+	PromptEvalCount int         `json:"prompt_eval_count"`
 }
 
 // NewClient creates a new Ollama client.
@@ -381,7 +382,7 @@ func (c *Client) ChatStream(ctx context.Context, req *ChatRequest) (<-chan ChatR
 
 // Embedding generates embeddings for the given input.
 func (c *Client) Embedding(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
-	resp, err := c.doRequest(ctx, "POST", "/api/embeddings", req)
+	resp, err := c.doRequest(ctx, "POST", "/api/embed", req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
