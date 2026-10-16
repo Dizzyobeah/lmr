@@ -619,15 +619,10 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		if found, ok := s.modelCache.FindFirstAvailable(embeddingModels); ok {
 			model = found
 		} else {
-			// Fall back to any model
-			models := s.modelCache.GetModelNames()
-			if len(models) > 0 {
-				model = models[0]
-			} else {
-				openai.WriteError(w, openai.ErrModelNotFound("No embedding models available"))
-				s.recordRequest("/v1/embeddings", nil, 0, 0, http.StatusNotFound, start)
-				return
-			}
+			// Never fall back to a chat model: Ollama rejects embeddings for it.
+			openai.WriteError(w, openai.ErrModelNotFound("No embedding model installed; pull nomic-embed-text"))
+			s.recordRequest("/v1/embeddings", nil, 0, 0, http.StatusNotFound, start)
+			return
 		}
 	}
 	
