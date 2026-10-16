@@ -18,7 +18,6 @@ type RateLimiter struct {
 // slidingWindow implements a simple sliding window rate limiter.
 type slidingWindow struct {
 	requests []time.Time
-	limit    int
 	mu       sync.Mutex
 }
 
@@ -71,17 +70,17 @@ func (rl *RateLimiter) allow(keyID string, limit int) bool {
 	if !exists {
 		window = &slidingWindow{
 			requests: make([]time.Time, 0, limit),
-			limit:    limit,
 		}
 		rl.windows[keyID] = window
 	}
 	rl.mu.Unlock()
 	
-	return window.allow()
+	return window.allow(limit)
 }
 
-// allow checks if a request is allowed in this window.
-func (sw *slidingWindow) allow() bool {
+// allow checks if a request is allowed in this window under the caller's
+// current limit, so a changed per-key limit applies without a restart.
+func (sw *slidingWindow) allow(limit int) bool {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 	
@@ -98,7 +97,7 @@ func (sw *slidingWindow) allow() bool {
 	sw.requests = validRequests
 	
 	// Check if we're at the limit
-	if len(sw.requests) >= sw.limit {
+	if len(sw.requests) >= limit {
 		return false
 	}
 	
