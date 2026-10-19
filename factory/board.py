@@ -143,18 +143,57 @@ def cmd_create(a):
     os.makedirs(os.path.join(JOBS, a.id), exist_ok=True)
 
 
+# Extensions that mark a token as a file. A short allowlist, because a config key such as
+# `server.port` also has a dot and a short tail but is not a path.
+FILE_EXTS = {"go", "md", "yaml", "yml", "json", "toml", "html", "css", "js", "ts", "tsx", "jsx", "py",
+             "sql", "sh", "txt", "mod", "sum", "proto", "xml", "csv", "env", "ini", "cfg", "conf",
+             "lock", "rs", "java", "kt", "rb", "tf", "gradle", "cs", "php", "swift", "c", "h", "cpp"}
+BARE_FILES = {"Makefile", "Dockerfile", "LICENSE", "Jenkinsfile"}
+
+
+def looks_like_path(tok):
+    if "/" in tok or tok in BARE_FILES:
+        return True
+    return "." in tok and tok.rsplit(".", 1)[1].lower() in FILE_EXTS
+
+
+def parse_files(text):
+    """Paths from the '## Files touched' section of a spec.
+
+    Only the backticked tokens that LEAD a bullet count (`- `path`: what changes`); anything after
+    the colon is prose, so identifiers and config keys there are ignored. A leading token that is
+    not path-like is dropped and reported in the returned warnings."""
+    m = re.search(r"^## Files touched[ \t]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    if not m:
+        raise SystemExit("spec.md has no '## Files touched' section")
+    paths, warnings = set(), []
+    for line in m.group(1).splitlines():
+        lead = re.match(r"^\s*[-*]\s+((?:`[^`\s]+`[ \t]*,?[ \t]*)+)", line)
+        if not lead:
+            if re.match(r"^\s*[-*]\s", line):
+                warnings.append(f"bullet does not start with a `path`: {line.strip()[:70]}")
+            continue
+        for tok in re.findall(r"`([^`\s]+)`", lead.group(1)):
+            if looks_like_path(tok):
+                paths.add(tok)
+            else:
+                warnings.append(f"not a file path, ignored: {tok}")
+    return sorted(paths), warnings
+
+
 def cmd_files(a):
     board = load()
     job = job_of(board, a.id)
-    spec = os.path.join(JOBS, a.id, "spec.md")
-    text = open(spec).read()
-    m = re.search(r"^## Files touched\s*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
-    if not m:
-        raise SystemExit("spec.md has no '## Files touched' section")
-    job["files"] = sorted(set(re.findall(r"`([^`\s]+)`", m.group(1))))
+    with open(os.path.join(JOBS, a.id, "spec.md")) as f:
+        paths, warnings = parse_files(f.read())
+    for w in warnings:
+        print(f"warning: {w}", file=sys.stderr)
+    if not paths:
+        raise SystemExit("spec.md lists no file paths under '## Files touched'")
+    job["files"] = paths
     touch(job)
     save(board)
-    print("\n".join(job["files"]))
+    print("\n".join(paths))
 
 
 def cmd_overlap(a):

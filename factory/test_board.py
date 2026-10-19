@@ -170,4 +170,40 @@ run2("profile", "demo", ok=False)          # refuses to overwrite a changed conf
 run2("profile", "demo", "--force")
 assert open(os.path.join(tmp2, "config.json")).read() == json.dumps(cfg)
 
+# ---- D1: "Files touched" parsing: paths only (real section from job 007) ---------
+SPEC_007 = """# 007: cap request body
+## Files touched
+- `internal/config/config.go`: `ServerConfig.MaxRequestBodyBytes`, default, Validate
+- `internal/config/loader.go`: `setDefaults` entry
+- `internal/config/config_test.go`: AC1 test
+- `internal/server/server.go`: body-limit middleware, 413-aware helper used by 3 handlers
+- `internal/server/server_bodylimit_test.go`: new, AC2 to AC4 tests
+- `pkg/openai/errors.go`: `ErrRequestTooLarge`
+- `config.example.yaml`: document `server.max_request_body_bytes`
+- `README.md`: config block line and vision note
+
+## Notes for reviewers
+`handler.go` is mentioned here and must not count.
+"""
+paths, warns = board.parse_files(SPEC_007)
+assert paths == sorted(["internal/config/config.go", "internal/config/loader.go",
+                        "internal/config/config_test.go", "internal/server/server.go",
+                        "internal/server/server_bodylimit_test.go", "pkg/openai/errors.go",
+                        "config.example.yaml", "README.md"]), paths
+assert warns == [], warns
+# identifiers and config keys that LEAD a bullet are rejected with a warning, not recorded
+paths, warns = board.parse_files("## Files touched\n- `setDefaults`: x\n- `server.port`: y\n- `a/b.go`, `Makefile`: z\n- prose bullet\n")
+assert paths == ["Makefile", "a/b.go"], paths
+assert len(warns) == 3, warns
+for n, bad in enumerate(["no section here", "## Files touched\n- nothing useful\n"]):
+    jid = f"01{n}-bad-spec"
+    run("create", jid, "bad spec")  # outside the try: a setup failure must not look like a pass
+    write(jid, "spec.md", bad)
+    try:
+        run("files", jid)
+        raise AssertionError(f"accepted {bad!r}")
+    except SystemExit as e:
+        assert "Files touched" in str(e), e
+    run("stage", jid, "merged")
+
 print("ok: board.py self-check passed")
