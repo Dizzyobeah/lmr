@@ -91,6 +91,18 @@ def job_of(board, job_id):
     raise SystemExit(f"no such job: {job_id}")
 
 
+def ensure_backlog():
+    """backlog.md is local state (git-ignored), like board.json: create it when it is missing."""
+    if os.path.exists(BACKLOG):
+        return
+    example = os.path.join(HERE, "backlog.example.md")
+    if os.path.exists(example):
+        shutil.copyfile(example, BACKLOG)
+    else:
+        with open(BACKLOG, "w") as f:
+            f.write("# Factory backlog\n\n`/factory next` runs the first unchecked item.\n\n")
+
+
 def touch(job):
     job["updated"] = now()
 
@@ -141,6 +153,7 @@ def cmd_create(a):
     board["jobs"].append(job)
     save(board)
     os.makedirs(os.path.join(JOBS, a.id), exist_ok=True)
+    ensure_backlog()
 
 
 # Extensions that mark a token as a file. A short allowlist, because a config key such as
@@ -280,7 +293,8 @@ def cmd_followups(a):
     problem even if worded differently, so only the first is queued (also across earlier runs)."""
     board = load()
     job = job_of(board, a.id)
-    existing = open(BACKLOG).read() if os.path.exists(BACKLOG) else ""
+    ensure_backlog()
+    existing = open(BACKLOG).read()
     seen = {k for k in map(location_key, existing.splitlines()) if k}
     added = dupes = 0
     for r in REVIEWERS:

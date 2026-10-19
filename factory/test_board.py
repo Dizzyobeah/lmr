@@ -259,4 +259,19 @@ r = run3("followups", "020-fu")                      # idempotent: a second run 
 assert "0 follow-up(s) added" in r.stdout, r.stdout
 assert len([l for l in open(os.path.join(tmp3, "backlog.md")).read().splitlines() if l.startswith("- [ ]")]) == 3
 
+# ---- D4: backlog.md is created when missing --------------------------------------
+for with_example in (False, True):
+    d4 = tempfile.mkdtemp()
+    if with_example:
+        open(os.path.join(d4, "backlog.example.md"), "w").write("# From example\n\n- [ ] sample item\n")
+    env4 = {**os.environ, "FACTORY_DIR": d4}
+    r = subprocess.run([sys.executable, os.path.join(here, "board.py"), "create", "030-bl", "backlog"],
+                       env=env4, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    text = open(os.path.join(d4, "backlog.md")).read()          # created without us writing it
+    assert ("From example" in text) if with_example else text.startswith("# Factory backlog"), text
+    open(os.path.join(d4, "backlog.md"), "a").write("- [x] ticked by hand\n")  # an existing file is never overwritten
+    subprocess.run([sys.executable, os.path.join(here, "board.py"), "create", "031-bl", "again"], env=env4, check=True)
+    assert "ticked by hand" in open(os.path.join(d4, "backlog.md")).read()
+
 print("ok: board.py self-check passed")

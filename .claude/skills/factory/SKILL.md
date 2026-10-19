@@ -46,7 +46,8 @@ factory/config.json                  project facts, tests, reviewers, escalation
 factory/profiles/<name>/config.json  ready-made configs (board.py profile <name>)
 factory/board.json                   state, local and git-ignored (board.py creates and writes it)
 factory/board.py                     the only way to change state; self-check: factory/test_board.py
-factory/backlog.md                   "- [ ] feature" queue (board.py followups appends)
+factory/backlog.md                   "- [ ] feature" queue; local and git-ignored, created from
+                                     factory/backlog.example.md (board.py followups appends)
 factory/jobs/<job-id>/spec.md        spec-writer
 factory/jobs/<job-id>/build.md       builder
 factory/jobs/<job-id>/round-N/review-<key>.md   reviewers
