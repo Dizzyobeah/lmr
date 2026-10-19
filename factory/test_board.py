@@ -206,4 +206,22 @@ for n, bad in enumerate(["no section here", "## Files touched\n- nothing useful\
         assert "Files touched" in str(e), e
     run("stage", jid, "merged")
 
+# ---- D2: leftover scratch worktrees are reported ---------------------------------
+root = tempfile.mkdtemp()                      # REPO is the parent of FACTORY_DIR, so keep it private
+fdir = os.path.join(root, "factory")
+os.makedirs(fdir)
+for d in ("001-x", "001-x-scratch-code", "002-y-scratch-security"):
+    os.makedirs(os.path.join(root, ".claude", "worktrees", d))
+r = subprocess.run([sys.executable, os.path.join(here, "board.py"), "create", "001-x", "X"],
+                   env={**os.environ, "FACTORY_DIR": fdir}, capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+subprocess.run([sys.executable, os.path.join(here, "board.py"), "stage", "001-x", "merged"],
+               env={**os.environ, "FACTORY_DIR": fdir}, check=True)
+out = subprocess.run([sys.executable, os.path.join(here, "board.py"), "worktrees"],
+                     env={**os.environ, "FACTORY_DIR": fdir}, capture_output=True, text=True, check=True).stdout
+assert "remove  001-x" in out, out
+assert "stale-scratch  001-x-scratch-code" in out, out
+assert "stale-scratch  002-y-scratch-security" in out, out
+assert "stale-scratch  001-x " not in out, out  # the job's own worktree is not a scratch copy
+
 print("ok: board.py self-check passed")

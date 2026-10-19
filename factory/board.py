@@ -350,6 +350,12 @@ def cmd_worktrees(a):
             print(f"remove  {job['id']}  git worktree remove {job['worktree']}")
         else:
             print(f"keep    {job['id']}  ({job['stage']})  {job['worktree']}")
+    # Scratch worktrees are private copies a reviewer makes for experiments; none should outlive it.
+    root = os.path.join(REPO, ".claude", "worktrees")
+    if os.path.isdir(root):
+        for name in sorted(os.listdir(root)):
+            if re.search(r"-scratch-.+$", name) and os.path.isdir(os.path.join(root, name)):
+                print(f"stale-scratch  {name}  git worktree remove --force .claude/worktrees/{name}")
 
 
 def cmd_profile(a):

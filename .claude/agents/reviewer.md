@@ -24,6 +24,18 @@ job's code is checked out in `.claude/worktrees/<job-id>`.
 
 **Write**: only `factory/jobs/<job-id>/round-<N>/review-<key>.md`. Don't edit code.
 
+**Never modify files in the job worktree.** Other reviewers are reading and testing it at the
+same time, so an edit there can fail their runs. Read-only commands (diff, grep, running the
+tests) may use it. For any experiment, such as reverting a line to see whether a test fails
+(a mutation check), make your own private copy, work only there, and remove it afterwards:
+
+```bash
+git worktree add --detach .claude/worktrees/<job-id>-scratch-<key> factory/<job-id>
+# edit and run tests only inside .claude/worktrees/<job-id>-scratch-<key>
+git worktree remove --force .claude/worktrees/<job-id>-scratch-<key>
+ls .claude/worktrees/   # confirm it is gone
+```
+
 Format. The first line is exactly one of these:
 
 ```
