@@ -20,11 +20,11 @@ factory folder.
 
 ## Where to work
 Never switch branches in the main checkout; the orchestrator lives there.
-Work in a sibling worktree:
+Work in a worktree under the repo's `.claude/worktrees/` (run from the repo root):
 
 ```bash
-git worktree add ../lmr-<job-id> -b factory/<job-id> origin/main   # first round only
-cd ../lmr-<job-id>
+git worktree add .claude/worktrees/<job-id> -b factory/<job-id> origin/main   # first round only
+cd .claude/worktrees/<job-id>
 ```
 
 ## How to work

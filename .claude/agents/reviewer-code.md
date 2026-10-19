@@ -22,7 +22,7 @@ Check:
 - Bugs: nil derefs, unchecked errors, races (shared maps, goroutines), leaks.
 - Fits the codebase: gofmt style, zerolog, `openai.WriteError`, no new deps,
   no speculative abstractions, smallest diff that works.
-- Tests: try `go vet ./... && go test -race ./...` in `../lmr-<job-id>`. If Go
+- Tests: try `go vet ./... && go test -race ./...` in `.claude/worktrees/<job-id>`. If Go
   isn't available, say "tests not run" rather than guessing.
 
 Format. The first line is exactly one of these:

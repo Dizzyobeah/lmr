@@ -104,7 +104,7 @@ def cmd_create(a):
         raise SystemExit(f"job exists: {a.id}")
     job = {
         "id": a.id, "title": a.title, "branch": f"factory/{a.id}",
-        "worktree": f"../lmr-{a.id}", "stage": "spec", "round": 0,
+        "worktree": f".claude/worktrees/{a.id}", "stage": "spec", "round": 0,
         "reviews": {}, "history": [], "decision": None,
         "files": [], "tests": None, "ahead_behind": None, "pr": None,
     }

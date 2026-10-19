@@ -54,7 +54,7 @@ factory/jobs/<job-id>/decision.md    approver
 factory/jobs/<job-id>/pr-body.md     you, before opening the PR
 ```
 
-Code lives on branch `factory/<job-id>` in worktree `../lmr-<job-id>`, created
+Code lives on branch `factory/<job-id>` in worktree `.claude/worktrees/<job-id>`, created
 from `origin/main`. Never switch branches in this checkout.
 
 ## board.json
@@ -63,7 +63,7 @@ Managed by `board.py`; the dashboard polls it. Shape of a job:
 
 ```json
 { "id": "003-rate-limiting", "title": "Rate limit per API key",
-  "branch": "factory/003-rate-limiting", "worktree": "../lmr-003-rate-limiting",
+  "branch": "factory/003-rate-limiting", "worktree": ".claude/worktrees/003-rate-limiting",
   "stage": "review", "round": 2,
   "reviews": { "security": "CHANGES", "ux": "PASS", "ui": "pending", "code": "PASS" },
   "history": [ { "security": "CHANGES", "ux": "PASS", "ui": "PASS", "code": "CHANGES" } ],
@@ -83,7 +83,7 @@ Managed by `board.py`; the dashboard polls it. Shape of a job:
    Then the job id, round, and the other paths it needs. Agents have been seen
    returning a report as chat text and skipping the file; the first line stops that.
 2. Give absolute paths (main checkout `/Users/calund/projects/_git/lmr`, worktree
-   `../lmr-<job-id>`).
+   `.claude/worktrees/<job-id>`).
 3. After the agent finishes, check the file exists. If not, re-spawn that agent
    with the same prompt plus: "A previous attempt did not write the file. Writing it
    is your job and is explicitly allowed."
@@ -172,16 +172,16 @@ Nothing in this skill merges into `main`, locally or on GitHub.
 
 ```bash
 # 1. The job worktree must be clean (tracked files); stop and ask if not.
-git -C ../lmr-<job-id> diff --quiet && git -C ../lmr-<job-id> diff --cached --quiet || { echo "dirty worktree"; exit 1; }
+git -C .claude/worktrees/<job-id> diff --quiet && git -C .claude/worktrees/<job-id> diff --cached --quiet || { echo "dirty worktree"; exit 1; }
 
 # 2. Bring the branch up to the latest origin/main and re-test there.
-git -C ../lmr-<job-id> fetch origin
-git -C ../lmr-<job-id> merge --no-edit origin/main   # if this conflicts: abort, needs-human
-docker run --rm -v "$PWD/../lmr-<job-id>":/src -w /src golang:1.25 sh -c 'go vet ./... && go test -race ./...'
+git -C .claude/worktrees/<job-id> fetch origin
+git -C .claude/worktrees/<job-id> merge --no-edit origin/main   # if this conflicts: abort, needs-human
+docker run --rm -v "$PWD/.claude/worktrees/<job-id>":/src -w /src golang:1.25 sh -c 'go vet ./... && go test -race ./...'
 # If the tests fail, stop: needs-human, record the failure.
 
 # 3. Publish the branch and open the PR against main.
-git -C ../lmr-<job-id> push -u origin factory/<job-id>
+git -C .claude/worktrees/<job-id> push -u origin factory/<job-id>
 gh pr create --base main --head factory/<job-id> --title "<title>" --body-file factory/jobs/<job-id>/pr-body.md
 ```
 
