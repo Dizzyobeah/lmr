@@ -103,7 +103,7 @@ func TestAdminTemplateKeysTableHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, table, ok := strings.Cut(string(b), `hx-get="/admin/api/keys"`)
+	_, table, ok := strings.Cut(string(b), `hx-get="{{.AdminPath}}/api/keys"`)
 	if !ok {
 		t.Fatal("keys table not found in admin.html")
 	}

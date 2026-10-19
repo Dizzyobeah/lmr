@@ -51,6 +51,14 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	// Normalise admin.path so every "{Path}/..." join yields a single slash.
+	cfg.Admin.Path = strings.TrimRight(cfg.Admin.Path, "/")
+	if cfg.Admin.Path == "" {
+		cfg.Admin.Path = "/admin"
+	} else if !strings.HasPrefix(cfg.Admin.Path, "/") {
+		cfg.Admin.Path = "/" + cfg.Admin.Path
+	}
+
 	// Validate
 	if err := cfg.Validate(); err != nil {
 		return nil, err

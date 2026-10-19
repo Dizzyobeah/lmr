@@ -281,7 +281,7 @@ func (h *Handler) handleChatAPI(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.RecordRequest(RecentRequest{
 			Time:       start,
-			Endpoint:   "/admin/chat",
+			Endpoint:   h.config.Path + "/chat",
 			Model:      routeResult.Model,
 			Category:   category,
 			LatencyMs:  time.Since(start).Milliseconds(),
@@ -297,7 +297,7 @@ func (h *Handler) handleChatAPI(w http.ResponseWriter, r *http.Request) {
 	// Record for the dashboard and metrics views.
 	h.RecordRequest(RecentRequest{
 		Time:       start,
-		Endpoint:   "/admin/chat",
+		Endpoint:   h.config.Path + "/chat",
 		Model:      routeResult.Model,
 		Category:   category,
 		Tokens:     totalTokens,
@@ -648,8 +648,8 @@ func (h *Handler) handleListKeys(w http.ResponseWriter, r *http.Request) {
 			<td>%d</td>
 			<td>%s</td>
 			<td class="%s">%s</td>
-			<td><button class="btn btn-danger" hx-delete="/admin/api/keys/%s" hx-confirm="Delete this key?" hx-swap="none" hx-on::after-request="document.body.dispatchEvent(new CustomEvent('keyDeleted'))">Delete</button></td>
-		</tr>`, html.EscapeString(key.ID), html.EscapeString(key.Name), html.EscapeString(fmt.Sprint(key.Scopes)), rateLimit, key.UsageCount, lastUsed, statusStyle, status, html.EscapeString(key.ID))
+			<td><button class="btn btn-danger" hx-delete="%s/api/keys/%s" hx-confirm="Delete this key?" hx-swap="none" hx-on::after-request="document.body.dispatchEvent(new CustomEvent('keyDeleted'))">Delete</button></td>
+		</tr>`, html.EscapeString(key.ID), html.EscapeString(key.Name), html.EscapeString(fmt.Sprint(key.Scopes)), rateLimit, key.UsageCount, lastUsed, statusStyle, status, html.EscapeString(h.config.Path), html.EscapeString(key.ID))
 	}
 	
 	fmt.Fprint(w, `</tbody>`)

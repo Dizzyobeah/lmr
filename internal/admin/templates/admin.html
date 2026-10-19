@@ -32,7 +32,7 @@
             <a href="#" @click.prevent="currentTab = 'models'" :class="{ active: currentTab === 'models' }">Models</a>
             <a href="#" @click.prevent="currentTab = 'keys'" :class="{ active: currentTab === 'keys' }">API Keys</a>
             <a href="#" @click.prevent="currentTab = 'requests'" :class="{ active: currentTab === 'requests' }">Requests</a>
-            <a href="/admin/chat">Chat Tester</a>
+            <a href="{{.AdminPath}}/chat">Chat Tester</a>
         </nav>
     </header>
     <div class="brand-ribbon"></div>
@@ -42,14 +42,14 @@
         <div x-show="currentTab === 'dashboard'" class="dashboard">
             <div class="card">
                 <h2>System status</h2>
-                <div hx-get="/admin/api/status" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                <div hx-get="{{.AdminPath}}/api/status" hx-trigger="load, every 10s" hx-swap="innerHTML">
                     <div class="loading">Loading...</div>
                 </div>
             </div>
             
             <div class="card">
                 <h2>Request statistics</h2>
-                <div class="stat-grid" hx-get="/admin/api/stats" hx-trigger="load, every 5s" hx-swap="innerHTML">
+                <div class="stat-grid" hx-get="{{.AdminPath}}/api/stats" hx-trigger="load, every 5s" hx-swap="innerHTML">
                     <div class="stat-item loading">
                         <div class="value">-</div>
                         <div class="label">Total Requests</div>
@@ -71,14 +71,14 @@
             
             <div class="card">
                 <h2>Model usage</h2>
-                <div hx-get="/admin/api/model-usage" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                <div hx-get="{{.AdminPath}}/api/model-usage" hx-trigger="load, every 10s" hx-swap="innerHTML">
                     <div class="loading">Loading...</div>
                 </div>
             </div>
             
             <div class="card">
                 <h2>Classification distribution</h2>
-                <div hx-get="/admin/api/classification-stats" hx-trigger="load, every 10s" hx-swap="innerHTML">
+                <div hx-get="{{.AdminPath}}/api/classification-stats" hx-trigger="load, every 10s" hx-swap="innerHTML">
                     <div class="loading">Loading...</div>
                 </div>
             </div>
@@ -87,7 +87,7 @@
         <!-- Models Tab -->
         <div x-show="currentTab === 'models'" class="card tab-card">
             <h2>Available models</h2>
-            <table hx-get="/admin/api/models" hx-trigger="load, every 30s" hx-swap="innerHTML">
+            <table hx-get="{{.AdminPath}}/api/models" hx-trigger="load, every 30s" hx-swap="innerHTML">
                 <thead>
                     <tr>
                         <th>Name</th>
@@ -109,7 +109,7 @@
                 <h2>API keys</h2>
                 <button class="btn" @click="showCreateKeyModal = true">Create Key</button>
             </div>
-            <table hx-get="/admin/api/keys" hx-trigger="load, keyCreated from:body, keyDeleted from:body" hx-swap="innerHTML">
+            <table hx-get="{{.AdminPath}}/api/keys" hx-trigger="load, keyCreated from:body, keyDeleted from:body" hx-swap="innerHTML">
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -131,7 +131,7 @@
         <!-- Requests Tab -->
         <div x-show="currentTab === 'requests'" class="card tab-card">
             <h2>Recent requests</h2>
-            <table hx-get="/admin/api/requests" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <table hx-get="{{.AdminPath}}/api/requests" hx-trigger="load, every 5s" hx-swap="innerHTML">
                 <thead>
                     <tr>
                         <th>Time</th>
@@ -157,7 +157,7 @@
                 <h3>Create API Key</h3>
                 <button class="close-btn" aria-label="Close" @click="showCreateKeyModal = false">&times;</button>
             </div>
-            <form hx-post="/admin/api/keys" hx-swap="none" @htmx:after-request="handleKeyCreated($event)">
+            <form hx-post="{{.AdminPath}}/api/keys" hx-swap="none" @htmx:after-request="handleKeyCreated($event)">
                 <div class="form-group">
                     <label>Name</label>
                     <input type="text" name="name" required placeholder="My API Key">

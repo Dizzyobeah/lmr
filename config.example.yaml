@@ -90,7 +90,7 @@ admin:
   # IMPORTANT: Set via ADMIN_PASSWORD environment variable
   # password: ""  # Set via ADMIN_PASSWORD env var
   
-  # URL path prefix for admin UI
+  # URL path prefix for admin UI. May be nested (e.g. "/ops/admin"); a trailing slash is ignored
   path: "/admin"
   
   # Admin session duration
