@@ -274,4 +274,32 @@ for with_example in (False, True):
     subprocess.run([sys.executable, os.path.join(here, "board.py"), "create", "031-bl", "again"], env=env4, check=True)
     assert "ticked by hand" in open(os.path.join(d4, "backlog.md")).read()
 
+# ---- E4: sync names missing reviewer files; incident logs misses ------------------
+tmp5 = tempfile.mkdtemp()
+env5 = {**os.environ, "FACTORY_DIR": tmp5}
+def run5(*argv, ok=True):
+    r = subprocess.run([sys.executable, os.path.join(here, "board.py"), *argv], env=env5, capture_output=True, text=True)
+    assert (r.returncode == 0) == ok, (argv, r.stdout, r.stderr)
+    return r
+run5("create", "040-miss", "missing files"); run5("stage", "040-miss", "build"); run5("start-review", "040-miss")
+rd5 = os.path.join(tmp5, "jobs", "040-miss", "round-1"); os.makedirs(rd5, exist_ok=True)
+open(os.path.join(rd5, "review-security.md"), "w").write("VERDICT: PASS\n")
+open(os.path.join(rd5, "review-code.md"), "w").write("VERDICT: PASS\n")
+out = run5("sync", "040-miss").stdout
+assert "round open" in out and "missing: ux, ui" in out, out          # names who to chase, in config order
+open(os.path.join(rd5, "review-ux.md"), "w").write("VERDICT: PASS\n")
+open(os.path.join(rd5, "review-ui.md"), "w").write("VERDICT: PASS\n")
+out = run5("sync", "040-miss").stdout
+assert "round complete" in out and "missing" not in out, out           # nothing to chase once all are on disk
+
+inc = os.path.join(tmp5, "jobs", "040-miss", "incidents.md")
+assert not os.path.exists(inc)
+run5("incident", "040-miss", "reviewer-ux", "sonnet: handed back text, no Write call; fixed by SendMessage (rung 1)")
+run5("incident", "040-miss", "reviewer-ui", "sonnet: no file; fixed by re-spawn (rung 2)")
+text = open(inc).read()
+assert text.startswith("# Incidents: 040-miss") and text.count("\n- ") == 2, text
+assert "reviewer-ux: sonnet" in text and "reviewer-ui: sonnet" in text and "Z reviewer-ux" in text, text
+run5("incident", "999-nope", "reviewer-ux", "x", ok=False)             # unknown job is refused
+assert not os.path.exists(os.path.join(tmp5, "jobs", "999-nope", "incidents.md"))
+
 print("ok: board.py self-check passed")

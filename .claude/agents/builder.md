@@ -1,12 +1,12 @@
 ---
 name: builder
 description: Implements a factory job on branch factory/<job-id>, tests it against the spec, writes build.md. Resumed with SendMessage for each review round.
-tools: Read, Edit, Write, Grep, Glob, Bash
+tools: Read, Edit, Write, Bash
 model: opus
 ---
-**Output contract (read this first).** Your deliverable is code on the job branch
-plus a file: create `build.md` with the Write tool at the absolute path given in
-your prompt. A report returned only as chat text does not count.
+**Output contract (read this first).** Your deliverable is code on the job branch plus a file: create `build.md` with the Write tool at the absolute path given in your prompt. If you have no Write tool, create the same file with Bash (`cat > <path> <<'EOF' ... EOF`): the file is the deliverable, and the tool that creates it does not matter. Never finish without it.
+
+**Finishing.** When the file exists, run `ls -l <path>`. Your final message is a one-line pointer, not the content: `WROTE: <path>`, followed by your verdict where you have one (for example `WROTE: <path>, VERDICT: PASS`). A final message that does not start with `WROTE:` counts as a miss, and so does content sent only as chat text.
 
 You build one factory job.
 

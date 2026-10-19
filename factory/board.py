@@ -9,7 +9,8 @@ Replaces hand-edited board.json. Every write validates the stage, sets `updated`
   board.py overlap <id>                 exit 1 if the job's files overlap an in-flight job
   board.py stage <id> <stage>
   board.py start-review <id>            round dir + all four verdicts pending, stage review
-  board.py sync <id>                    read verdict files of the current round
+  board.py sync <id>                    read verdict files of the current round (names missing files)
+  board.py incident <id> <agent> <note> log a miss (agent that did not write its file) in jobs/<id>/incidents.md
   board.py followups <id>               move [pre-existing] findings of this round to backlog
   board.py next-round <id>              history += current reviews, round+1, stage build
   board.py decide <id>                  read decision.md: APPROVE|ESCALATE (ESCALATE -> needs-human)
@@ -252,11 +253,12 @@ def cmd_sync(a):
     board = load()
     job = job_of(board, a.id)
     d = round_dir(job)
-    bad = []
+    bad, missing = [], []
     for r in REVIEWERS:
         p = os.path.join(d, f"review-{r}.md")
         if not os.path.exists(p):
             job["reviews"][r] = "pending"
+            missing.append(r)
             continue
         try:
             job["reviews"][r] = parse_verdict(first_line(p), ["PASS", "CHANGES"])
@@ -271,6 +273,8 @@ def cmd_sync(a):
     print(json.dumps(job["reviews"]))
     done = all(v in ("PASS", "CHANGES") for v in job["reviews"].values())
     print("round complete" if done else "round open")
+    if missing:
+        print("missing: " + ", ".join(missing))
     if bad:
         raise SystemExit("malformed verdict(s), re-run those reviewers:\n  " + "\n  ".join(bad))
 
@@ -338,6 +342,19 @@ def cmd_decide(a):
     touch(job)
     save(board)
     print(job["decision"])
+
+
+def cmd_incident(a):
+    """Append a dated line to jobs/<id>/incidents.md (an agent that finished without its file)."""
+    job_of(load(), a.id)  # refuses an unknown job
+    path = os.path.join(JOBS, a.id, "incidents.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    new = not os.path.exists(path)
+    with open(path, "a") as f:
+        if new:
+            f.write(f"# Incidents: {a.id}\n\n")
+        f.write(f"- {now()} {a.agent}: {a.note}\n")
+    print(path)
 
 
 def cmd_tests(a):
@@ -422,6 +439,7 @@ def main(argv=None):
         ("followups", cmd_followups, ["id"]),
         ("next-round", cmd_next_round, ["id"]),
         ("decide", cmd_decide, ["id"]),
+        ("incident", cmd_incident, ["id", "agent", "note"]),
         ("tests", cmd_tests, ["id", "summary"]),
         ("pr", cmd_pr, ["id", "url"]),
         ("status", cmd_status, []),
