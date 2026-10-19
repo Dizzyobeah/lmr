@@ -4,16 +4,16 @@ description: Implements a factory job on branch factory/<job-id>, tests it again
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: opus
 ---
-**Output contract (read this first).** Your deliverable is a file: create it with
-the Write tool at the absolute path given in your prompt. Writing that one file is
-explicitly allowed and required, whatever else these instructions say about not
-editing. A review or report returned only as chat text does not count, and the
-round cannot finish without the file.
+**Output contract (read this first).** Your deliverable is code on the job branch
+plus a file: create `build.md` with the Write tool at the absolute path given in
+your prompt. A report returned only as chat text does not count.
 
-You build one factory job in the lmr repo (Go 1.25, chi, zerolog, SQLite via CGO).
+You build one factory job.
 
-**Read**: `factory/jobs/<job-id>/spec.md`. On a rework round, also every file in
-the round folder you are pointed at (`round-N/review-*.md`) and any
+**Read first**: `factory/config.json`: `project` (what the repo is, its
+conventions, docs to keep current) and `tests` (how to test, including UI checks).
+**Read**: `factory/jobs/<job-id>/spec.md`. On a rework round, also read every file
+in the round folder you are pointed at (`round-N/review-*.md`) and any
 `factory/jobs/<job-id>/rework-*.md` note from a human.
 **Write**: code on the branch, and only `factory/jobs/<job-id>/build.md` in the
 factory folder.
@@ -28,14 +28,14 @@ cd .claude/worktrees/<job-id>
 ```
 
 ## How to work
-- Match the code around you: tabs (`gofmt`), zerolog for logs, `openai.WriteError`
-  for API errors, table-driven `*_test.go` next to the code.
-- Smallest diff that meets the acceptance criteria. No new dependencies.
-- Test: `go vet ./... && go test -race ./...`. If `go` is not installed, try
-  `docker run --rm -v "$PWD":/src -w /src golang:1.25 go test -race ./...`.
-  If neither works, say so in build.md. Never claim tests ran when they didn't.
-- Commit on `factory/<job-id>` with conventional messages
-  (`feat(server): ...`, `fix(admin): ...`). One commit per round is fine.
+- Follow `project.conventions`. Make the smallest diff that meets the acceptance
+  criteria, with no new dependencies.
+- Test with `tests.host`. If that toolchain is missing, use `tests.docker`. If
+  neither works, say so in build.md. Never claim tests ran when they didn't.
+- If `tests.screenshots` applies to your change, take the screenshots, look at
+  them, and describe what you saw.
+- Commit on `factory/<job-id>` with conventional messages (`feat(scope): ...`,
+  `fix(scope): ...`). One commit per round is fine.
 
 ## build.md
 Overwrite it each round:
@@ -53,12 +53,13 @@ Branch: factory/<job-id>  Commit: <sha>
 
 ## Tests
 Command: <exact command run on the current branch HEAD>
-Result: <summary line, e.g. every package `ok`>
+Result: <summary line>
 (or `Result: not run: <reason>`; never claim a pass you did not see)
 
 ## Review responses (round 2+)
-- security: <finding> -> fixed in <file> / not changed because ...
+- <reviewer key>: <finding> -> fixed in <file> / not changed because ...
 ```
 
-When resumed for a new round: read every review in the round folder, fix all
-CHANGES findings (or explain in build.md why not), commit, rewrite build.md.
+When resumed for a new round, read every review in the round folder. Fix all
+`[introduced]` CHANGES findings, or explain in build.md why not. Then commit and
+rewrite build.md.
