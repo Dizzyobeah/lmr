@@ -38,13 +38,20 @@ Why this matters, 2-4 sentences, grounded in the code (cite file:line).
 - [ ] Tests: which test covers which AC.
 
 ## Files touched
-- `path/one`: what changes (one backtick path per bullet; the orchestrator
-  reads this section to avoid running overlapping jobs at the same time)
+- `path/one`: what changes
+- `path/two`: what changes
 
 ## Notes for reviewers
 One line per reviewer key from config, with the angle worth checking, or
 "nothing for <key>".
 ```
+
+**Files touched format.** The orchestrator reads this section to avoid running overlapping
+jobs at the same time, and takes only the backticked token that STARTS each bullet. So: one
+real file path (relative to the repo root) at the start of every bullet, then a colon, then
+prose. Put identifiers, function names and config keys after the colon and do not start a
+bullet with them (a bullet that starts with a symbol name such as setDefaults is ignored
+with a warning).
 
 Keep it small: the smallest change that delivers the feature. 3-6 acceptance
 criteria. Every criterion must be checkable by a test or a single command.

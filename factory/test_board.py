@@ -170,4 +170,108 @@ run2("profile", "demo", ok=False)          # refuses to overwrite a changed conf
 run2("profile", "demo", "--force")
 assert open(os.path.join(tmp2, "config.json")).read() == json.dumps(cfg)
 
+# ---- D1: "Files touched" parsing: paths only (real section from job 007) ---------
+SPEC_007 = """# 007: cap request body
+## Files touched
+- `internal/config/config.go`: `ServerConfig.MaxRequestBodyBytes`, default, Validate
+- `internal/config/loader.go`: `setDefaults` entry
+- `internal/config/config_test.go`: AC1 test
+- `internal/server/server.go`: body-limit middleware, 413-aware helper used by 3 handlers
+- `internal/server/server_bodylimit_test.go`: new, AC2 to AC4 tests
+- `pkg/openai/errors.go`: `ErrRequestTooLarge`
+- `config.example.yaml`: document `server.max_request_body_bytes`
+- `README.md`: config block line and vision note
+
+## Notes for reviewers
+`handler.go` is mentioned here and must not count.
+"""
+paths, warns = board.parse_files(SPEC_007)
+assert paths == sorted(["internal/config/config.go", "internal/config/loader.go",
+                        "internal/config/config_test.go", "internal/server/server.go",
+                        "internal/server/server_bodylimit_test.go", "pkg/openai/errors.go",
+                        "config.example.yaml", "README.md"]), paths
+assert warns == [], warns
+# identifiers and config keys that LEAD a bullet are rejected with a warning, not recorded
+paths, warns = board.parse_files("## Files touched\n- `setDefaults`: x\n- `server.port`: y\n- `a/b.go`, `Makefile`: z\n- prose bullet\n")
+assert paths == ["Makefile", "a/b.go"], paths
+assert len(warns) == 3, warns
+for n, bad in enumerate(["no section here", "## Files touched\n- nothing useful\n"]):
+    jid = f"01{n}-bad-spec"
+    run("create", jid, "bad spec")  # outside the try: a setup failure must not look like a pass
+    write(jid, "spec.md", bad)
+    try:
+        run("files", jid)
+        raise AssertionError(f"accepted {bad!r}")
+    except SystemExit as e:
+        assert "Files touched" in str(e), e
+    run("stage", jid, "merged")
+
+# ---- D2: leftover scratch worktrees are reported ---------------------------------
+root = tempfile.mkdtemp()                      # REPO is the parent of FACTORY_DIR, so keep it private
+fdir = os.path.join(root, "factory")
+os.makedirs(fdir)
+for d in ("001-x", "001-x-scratch-code", "002-y-scratch-security"):
+    os.makedirs(os.path.join(root, ".claude", "worktrees", d))
+r = subprocess.run([sys.executable, os.path.join(here, "board.py"), "create", "001-x", "X"],
+                   env={**os.environ, "FACTORY_DIR": fdir}, capture_output=True, text=True)
+assert r.returncode == 0, r.stderr
+subprocess.run([sys.executable, os.path.join(here, "board.py"), "stage", "001-x", "merged"],
+               env={**os.environ, "FACTORY_DIR": fdir}, check=True)
+out = subprocess.run([sys.executable, os.path.join(here, "board.py"), "worktrees"],
+                     env={**os.environ, "FACTORY_DIR": fdir}, capture_output=True, text=True, check=True).stdout
+assert "remove  001-x" in out, out
+assert "stale-scratch  001-x-scratch-code" in out, out
+assert "stale-scratch  002-y-scratch-security" in out, out
+assert "stale-scratch  001-x " not in out, out  # the job's own worktree is not a scratch copy
+
+# ---- D3: follow-ups dedupe by location (real wording from job 007) ---------------
+assert board.location_key("internal/admin/handler.go:233 `handleChatAPI` decodes r.Body") == ("internal/admin/handler.go", 233)
+assert board.location_key("(low) internal/admin/handler.go:377-378, 660: forms") == ("internal/admin/handler.go", 377)
+assert board.location_key("internal/server/server.go:146: the 400 path echoes") == ("internal/server/server.go", 146)
+assert board.location_key("The limit applies only to the group with the API routes.") is None
+assert board.location_key("see server.port:8080 in the config") is None  # not a file
+
+tmp3 = tempfile.mkdtemp()
+open(os.path.join(tmp3, "backlog.md"), "w").write("# backlog\n")
+env3 = {**os.environ, "FACTORY_DIR": tmp3}
+def run3(*argv):
+    r = subprocess.run([sys.executable, os.path.join(here, "board.py"), *argv], env=env3, capture_output=True, text=True)
+    assert r.returncode == 0, (argv, r.stdout, r.stderr)
+    return r
+run3("create", "020-fu", "follow-ups"); run3("stage", "020-fu", "build"); run3("start-review", "020-fu")
+rd = os.path.join(tmp3, "jobs", "020-fu", "round-1"); os.makedirs(rd, exist_ok=True)
+open(os.path.join(rd, "review-security.md"), "w").write(
+    "VERDICT: PASS\n- [pre-existing] (low) internal/admin/handler.go:233 `handleChatAPI` decodes `r.Body` without a cap.\n"
+    "- [pre-existing] (low) internal/admin/handler.go:377-378, 660: the login form uses the default 10 MB cap.\n"
+    "- [pre-existing] (low) internal/server/server.go:146: the 400 path echoes err.Error().\n")
+open(os.path.join(rd, "review-ux.md"), "w").write(
+    "VERDICT: PASS\n- [pre-existing] The limit applies only to the group with the API routes.\n")
+open(os.path.join(rd, "review-code.md"), "w").write(
+    "VERDICT: PASS\n- [pre-existing] internal/admin/handler.go:233 handleChatAPI decodes an uncapped body (out of scope).\n")
+r = run3("followups", "020-fu")
+assert "3 follow-up(s) added" in r.stdout and "1 duplicate(s) skipped" in r.stdout, r.stdout
+assert "no path:line" in r.stderr and "ux review" in r.stderr, r.stderr
+lines = [l for l in open(os.path.join(tmp3, "backlog.md")).read().splitlines() if l.startswith("- [ ]")]
+assert len(lines) == 3, lines
+assert sum("handler.go:233" in l for l in lines) == 1
+assert "The limit applies only" not in "".join(lines)
+r = run3("followups", "020-fu")                      # idempotent: a second run adds nothing
+assert "0 follow-up(s) added" in r.stdout, r.stdout
+assert len([l for l in open(os.path.join(tmp3, "backlog.md")).read().splitlines() if l.startswith("- [ ]")]) == 3
+
+# ---- D4: backlog.md is created when missing --------------------------------------
+for with_example in (False, True):
+    d4 = tempfile.mkdtemp()
+    if with_example:
+        open(os.path.join(d4, "backlog.example.md"), "w").write("# From example\n\n- [ ] sample item\n")
+    env4 = {**os.environ, "FACTORY_DIR": d4}
+    r = subprocess.run([sys.executable, os.path.join(here, "board.py"), "create", "030-bl", "backlog"],
+                       env=env4, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    text = open(os.path.join(d4, "backlog.md")).read()          # created without us writing it
+    assert ("From example" in text) if with_example else text.startswith("# Factory backlog"), text
+    open(os.path.join(d4, "backlog.md"), "a").write("- [x] ticked by hand\n")  # an existing file is never overwritten
+    subprocess.run([sys.executable, os.path.join(here, "board.py"), "create", "031-bl", "again"], env=env4, check=True)
+    assert "ticked by hand" in open(os.path.join(d4, "backlog.md")).read()
+
 print("ok: board.py self-check passed")

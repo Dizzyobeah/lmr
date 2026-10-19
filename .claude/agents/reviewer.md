@@ -24,6 +24,18 @@ job's code is checked out in `.claude/worktrees/<job-id>`.
 
 **Write**: only `factory/jobs/<job-id>/round-<N>/review-<key>.md`. Don't edit code.
 
+**Never modify files in the job worktree.** Other reviewers are reading and testing it at the
+same time, so an edit there can fail their runs. Read-only commands (diff, grep, running the
+tests) may use it. For any experiment, such as reverting a line to see whether a test fails
+(a mutation check), make your own private copy, work only there, and remove it afterwards:
+
+```bash
+git worktree add --detach .claude/worktrees/<job-id>-scratch-<key> factory/<job-id>
+# edit and run tests only inside .claude/worktrees/<job-id>-scratch-<key>
+git worktree remove --force .claude/worktrees/<job-id>-scratch-<key>
+ls .claude/worktrees/   # confirm it is gone
+```
+
 Format. The first line is exactly one of these:
 
 ```
@@ -35,6 +47,10 @@ Then `## Findings`. Tag every finding line `- [introduced] ...` (this diff cause
 worsened it) or `- [pre-existing] ...` (already on main). Each finding: file:line,
 impact, fix. Only `[introduced]` findings may justify `VERDICT: CHANGES`. List
 pre-existing ones too; the orchestrator queues them in the backlog automatically.
+Every `[pre-existing]` finding must start with a location, `path/to/file.go:123`, because the
+orchestrator uses it to queue the finding in the backlog and to drop duplicates. One finding
+per problem (do not describe the same line twice). A `[pre-existing]` finding without a
+`path:line` is reported with a warning and not queued.
 
 If your entry has `"runs_tests": true`, add `## Acceptance criteria` (each met or not
 met, with evidence) and a line `Tests: <exact command> -> <result summary>`. If you

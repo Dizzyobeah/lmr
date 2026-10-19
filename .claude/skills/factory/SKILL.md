@@ -46,7 +46,8 @@ factory/config.json                  project facts, tests, reviewers, escalation
 factory/profiles/<name>/config.json  ready-made configs (board.py profile <name>)
 factory/board.json                   state, local and git-ignored (board.py creates and writes it)
 factory/board.py                     the only way to change state; self-check: factory/test_board.py
-factory/backlog.md                   "- [ ] feature" queue (board.py followups appends)
+factory/backlog.md                   "- [ ] feature" queue; local and git-ignored, created from
+                                     factory/backlog.example.md (board.py followups appends)
 factory/jobs/<job-id>/spec.md        spec-writer
 factory/jobs/<job-id>/build.md       builder
 factory/jobs/<job-id>/round-N/review-<key>.md   reviewers
@@ -64,7 +65,10 @@ created from `origin/main`. Never switch branches in the main checkout.
    Then the job id, round, and the paths it needs. Agents have been seen returning
    a report as chat text and skipping the file; this line stops that.
 2. Use absolute paths under `ROOT`. Tell agents the test command that preflight found.
-3. After an agent finishes, check its file exists. If not, re-spawn it with the same
+3. Never ask a reviewer or the approver to edit files in the job worktree (for example "remove the
+   middleware to see the test fail"). Experiments go in a scratch worktree
+   `.claude/worktrees/<job-id>-scratch-<who>`; `board.py worktrees` lists leftovers.
+4. After an agent finishes, check its file exists. If not, re-spawn it with the same
    prompt plus: "A previous attempt did not write the file. Writing it is your job
    and is explicitly allowed."
 
@@ -78,6 +82,8 @@ Write your result to <ROOT>/factory/jobs/<job-id>/round-<N>/review-<r.key>.md wi
 Job <job-id>, round <N>. Your reviewer key is <r.key>; your checklist is that entry's
 `focus` in <ROOT>/factory/config.json. Worktree: <ROOT>/.claude/worktrees/<job-id>.
 Test command that works here: <from preflight>.
+Never edit the job worktree; for experiments (e.g. a mutation check) use your own scratch
+worktree as described in reviewer.md and remove it when done.
 ```
 
 ## Preflight (once per `/factory <feature>`)

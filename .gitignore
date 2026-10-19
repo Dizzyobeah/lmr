@@ -57,3 +57,4 @@ factory/jobs/*
 __pycache__/
 .claude/worktrees/
 factory/board.json
+factory/backlog.md

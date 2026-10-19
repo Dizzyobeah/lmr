@@ -91,6 +91,18 @@ def job_of(board, job_id):
     raise SystemExit(f"no such job: {job_id}")
 
 
+def ensure_backlog():
+    """backlog.md is local state (git-ignored), like board.json: create it when it is missing."""
+    if os.path.exists(BACKLOG):
+        return
+    example = os.path.join(HERE, "backlog.example.md")
+    if os.path.exists(example):
+        shutil.copyfile(example, BACKLOG)
+    else:
+        with open(BACKLOG, "w") as f:
+            f.write("# Factory backlog\n\n`/factory next` runs the first unchecked item.\n\n")
+
+
 def touch(job):
     job["updated"] = now()
 
@@ -141,20 +153,60 @@ def cmd_create(a):
     board["jobs"].append(job)
     save(board)
     os.makedirs(os.path.join(JOBS, a.id), exist_ok=True)
+    ensure_backlog()
+
+
+# Extensions that mark a token as a file. A short allowlist, because a config key such as
+# `server.port` also has a dot and a short tail but is not a path.
+FILE_EXTS = {"go", "md", "yaml", "yml", "json", "toml", "html", "css", "js", "ts", "tsx", "jsx", "py",
+             "sql", "sh", "txt", "mod", "sum", "proto", "xml", "csv", "env", "ini", "cfg", "conf",
+             "lock", "rs", "java", "kt", "rb", "tf", "gradle", "cs", "php", "swift", "c", "h", "cpp"}
+BARE_FILES = {"Makefile", "Dockerfile", "LICENSE", "Jenkinsfile"}
+
+
+def looks_like_path(tok):
+    if "/" in tok or tok in BARE_FILES:
+        return True
+    return "." in tok and tok.rsplit(".", 1)[1].lower() in FILE_EXTS
+
+
+def parse_files(text):
+    """Paths from the '## Files touched' section of a spec.
+
+    Only the backticked tokens that LEAD a bullet count (`- `path`: what changes`); anything after
+    the colon is prose, so identifiers and config keys there are ignored. A leading token that is
+    not path-like is dropped and reported in the returned warnings."""
+    m = re.search(r"^## Files touched[ \t]*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    if not m:
+        raise SystemExit("spec.md has no '## Files touched' section")
+    paths, warnings = set(), []
+    for line in m.group(1).splitlines():
+        lead = re.match(r"^\s*[-*]\s+((?:`[^`\s]+`[ \t]*,?[ \t]*)+)", line)
+        if not lead:
+            if re.match(r"^\s*[-*]\s", line):
+                warnings.append(f"bullet does not start with a `path`: {line.strip()[:70]}")
+            continue
+        for tok in re.findall(r"`([^`\s]+)`", lead.group(1)):
+            if looks_like_path(tok):
+                paths.add(tok)
+            else:
+                warnings.append(f"not a file path, ignored: {tok}")
+    return sorted(paths), warnings
 
 
 def cmd_files(a):
     board = load()
     job = job_of(board, a.id)
-    spec = os.path.join(JOBS, a.id, "spec.md")
-    text = open(spec).read()
-    m = re.search(r"^## Files touched\s*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
-    if not m:
-        raise SystemExit("spec.md has no '## Files touched' section")
-    job["files"] = sorted(set(re.findall(r"`([^`\s]+)`", m.group(1))))
+    with open(os.path.join(JOBS, a.id, "spec.md")) as f:
+        paths, warnings = parse_files(f.read())
+    for w in warnings:
+        print(f"warning: {w}", file=sys.stderr)
+    if not paths:
+        raise SystemExit("spec.md lists no file paths under '## Files touched'")
+    job["files"] = paths
     touch(job)
     save(board)
-    print("\n".join(job["files"]))
+    print("\n".join(paths))
 
 
 def cmd_overlap(a):
@@ -223,23 +275,46 @@ def cmd_sync(a):
         raise SystemExit("malformed verdict(s), re-run those reviewers:\n  " + "\n  ".join(bad))
 
 
+LOCATION = re.compile(r"([\w./-]+):(\d+)")
+
+
+def location_key(text):
+    """(path, first line) of the first `path:line` in a finding, or None."""
+    for m in LOCATION.finditer(text):
+        if looks_like_path(m.group(1)):
+            return (m.group(1), int(m.group(2)))
+    return None
+
+
 def cmd_followups(a):
+    """Queue [pre-existing] findings of this round in the backlog.
+
+    A finding needs a `path:line`. Two findings with the same path and first line are the same
+    problem even if worded differently, so only the first is queued (also across earlier runs)."""
     board = load()
     job = job_of(board, a.id)
-    existing = open(BACKLOG).read() if os.path.exists(BACKLOG) else ""
-    added = 0
+    ensure_backlog()
+    existing = open(BACKLOG).read()
+    seen = {k for k in map(location_key, existing.splitlines()) if k}
+    added = dupes = 0
     for r in REVIEWERS:
         p = os.path.join(round_dir(job), f"review-{r}.md")
         if not os.path.exists(p):
             continue
         for text in read_findings(p)["pre-existing"]:
-            line = f"- [ ] {text} (found in {a.id}, {r} review)"
-            if text and text not in existing:
-                with open(BACKLOG, "a") as f:
-                    f.write(line + "\n")
-                existing += line + "\n"
-                added += 1
-    print(f"{added} follow-up(s) added to backlog.md")
+            key = location_key(text)
+            if key is None:
+                print(f"warning: {r} review has a [pre-existing] finding with no path:line, not queued: "
+                      f"{text[:80]}", file=sys.stderr)
+                continue
+            if key in seen:
+                dupes += 1
+                continue
+            seen.add(key)
+            with open(BACKLOG, "a") as f:
+                f.write(f"- [ ] {text} (found in {a.id}, {r} review)\n")
+            added += 1
+    print(f"{added} follow-up(s) added to backlog.md, {dupes} duplicate(s) skipped")
 
 
 def cmd_next_round(a):
@@ -311,6 +386,12 @@ def cmd_worktrees(a):
             print(f"remove  {job['id']}  git worktree remove {job['worktree']}")
         else:
             print(f"keep    {job['id']}  ({job['stage']})  {job['worktree']}")
+    # Scratch worktrees are private copies a reviewer makes for experiments; none should outlive it.
+    root = os.path.join(REPO, ".claude", "worktrees")
+    if os.path.isdir(root):
+        for name in sorted(os.listdir(root)):
+            if re.search(r"-scratch-.+$", name) and os.path.isdir(os.path.join(root, name)):
+                print(f"stale-scratch  {name}  git worktree remove --force .claude/worktrees/{name}")
 
 
 def cmd_profile(a):
