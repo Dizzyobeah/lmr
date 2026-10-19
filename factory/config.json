@@ -1,0 +1,50 @@
+{
+  "profile": "go-backend",
+  "project": {
+    "name": "lmr",
+    "summary": "Local Model Router: a Go 1.25 OpenAI-compatible API router in front of Ollama. chi for HTTP, zerolog for logs, SQLite keystore (CGO) for API keys encrypted with AUTH_ENCRYPTION_KEY, and an admin UI of server-rendered HTML in internal/admin/templates/ (Alpine.js + htmx, shared theme.css). Users are developers calling the OpenAI-compatible API (curl, VS Code, SDKs) and operators running it with Docker Compose.",
+    "conventions": [
+      "gofmt (tabs); some existing files are not gofmt-clean, so never reformat unrelated lines",
+      "zerolog for logs; openai.WriteError for API errors (OpenAI error shapes)",
+      "table-driven *_test.go next to the code",
+      "smallest diff that meets the acceptance criteria; no new dependencies",
+      "config keys in internal/config (struct, mapstructure tag, defaults in loader.go) and documented in config.example.yaml"
+    ],
+    "docs": ["README.md", "config.example.yaml"]
+  },
+  "tests": {
+    "host": "go vet ./... && go test -race ./...",
+    "docker": "docker run --rm -v \"$PWD\":/src -w /src golang:1.25 sh -c 'go vet ./... && go test -race ./...'",
+    "screenshots": "headless Chrome at desktop (1280px) and mobile (390px) widths for any UI change"
+  },
+  "reviewers": [
+    {
+      "key": "security", "label": "sec", "model": "opus",
+      "focus": "Security. Check authn/authz on new routes (API key middleware, admin session), secrets in logs or responses, input validation at the HTTP boundary, injection (SQL, template, header, HTML: html.EscapeString / html/template), constant-time comparison of secrets, resource exhaustion (unbounded maps, bodies, goroutines), error messages that leak internals. CHANGES only for high or medium findings; list low ones as notes."
+    },
+    {
+      "key": "ux", "label": "ux", "model": "sonnet",
+      "focus": "User experience for API users and operators. Does it solve the user's real problem; are errors actionable and in OpenAI error shape; OpenAI compatibility of responses; sensible config defaults and names; README and config.example.yaml updated when behaviour or setup changes; admin flows need no guesswork. CHANGES only when a user would be confused or blocked."
+    },
+    {
+      "key": "ui", "label": "ui", "model": "sonnet",
+      "focus": "Visual design of the admin UI in internal/admin/templates/ and the HTML fragments rendered in internal/admin/handler.go. Consistency with theme.css tokens and classes (no one-off inline styles), layout at narrow widths, loading/empty/error states, contrast, visible focus, labels on inputs and buttons. If the diff has no UI changes, write VERDICT: PASS and 'No UI changes in this job.'"
+    },
+    {
+      "key": "code", "label": "code", "model": "sonnet",
+      "focus": "Correctness and code quality. Each acceptance criterion is met and a test proves it; bugs (nil derefs, unchecked errors, races on shared maps or goroutines, leaks); read every caller of a changed function; fits the conventions in project.conventions; no speculative abstractions. Run the tests yourself and add the line `Tests: <command> -> <result>`. CHANGES for any bug or unmet criterion.",
+      "runs_tests": true
+    }
+  ],
+  "max_rounds": 2,
+  "escalate_on": [
+    "a change to the auth middleware or its allow-list, including any new unauthenticated route",
+    "crypto or secret handling",
+    "a new public route",
+    "a new external resource load (script, font, CDN)",
+    "a new dependency",
+    "a breaking API or config change",
+    "a data migration",
+    "missing or 'not run' test evidence"
+  ]
+}

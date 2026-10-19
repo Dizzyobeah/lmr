@@ -17,12 +17,17 @@ Replaces hand-edited board.json. Every write validates the stage, sets `updated`
   board.py pr <id> <url>                record the PR, stage pr-open
   board.py status                       refresh ahead/behind origin/main for open jobs
   board.py worktrees                    list job worktrees that can be removed
+  board.py profile <name> [--force]     install factory/profiles/<name>/config.json as factory/config.json
+
+Reviewers and the round limit come from factory/config.json (`reviewers`, `max_rounds`).
 """
 import argparse
 import datetime
+import filecmp
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -30,12 +35,31 @@ HERE = os.environ.get("FACTORY_DIR") or os.path.dirname(os.path.abspath(__file__
 BOARD = os.path.join(HERE, "board.json")
 JOBS = os.path.join(HERE, "jobs")
 BACKLOG = os.path.join(HERE, "backlog.md")
+CONFIG = os.path.join(HERE, "config.json")
+PROFILES = os.path.join(HERE, "profiles")
 REPO = os.path.dirname(HERE)
 
 STAGES = ["spec", "build", "review", "approve", "pr-open", "merged", "needs-human"]
 IN_FLIGHT = ["spec", "build", "review", "approve", "needs-human"]
-REVIEWERS = ["security", "ux", "ui", "code"]
-MAX_ROUNDS = 2
+DEFAULT_REVIEWERS = [["security", "sec"], ["ux", "ux"], ["ui", "ui"], ["code", "code"]]
+
+
+def load_config():
+    """Reviewers ([key, label] pairs) and max rounds from config.json, with defaults."""
+    try:
+        with open(CONFIG) as f:
+            cfg = json.load(f)
+    except FileNotFoundError:
+        return DEFAULT_REVIEWERS, 2
+    revs = [[r["key"], r.get("label", r["key"])] for r in cfg.get("reviewers", [])]
+    keys = [k for k, _ in revs]
+    if not revs or len(set(keys)) != len(keys):
+        raise SystemExit("config.json: `reviewers` must be a non-empty list with unique keys")
+    return revs, int(cfg.get("max_rounds", 2))
+
+
+REVIEWER_LABELS, MAX_ROUNDS = load_config()
+REVIEWERS = [k for k, _ in REVIEWER_LABELS]
 
 
 def now():
@@ -43,11 +67,16 @@ def now():
 
 
 def load():
-    with open(BOARD) as f:
-        return json.load(f)
+    """board.json is local state (git-ignored); start empty if it doesn't exist."""
+    try:
+        with open(BOARD) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"jobs": []}
 
 
 def save(board):
+    board["reviewers"] = REVIEWER_LABELS  # the dashboard draws its chips from this
     tmp = BOARD + ".tmp"
     with open(tmp, "w") as f:
         json.dump(board, f, indent=2)
@@ -284,6 +313,21 @@ def cmd_worktrees(a):
             print(f"keep    {job['id']}  ({job['stage']})  {job['worktree']}")
 
 
+def cmd_profile(a):
+    src = os.path.join(PROFILES, a.name, "config.json")
+    if not os.path.exists(src):
+        names = sorted(os.listdir(PROFILES)) if os.path.isdir(PROFILES) else []
+        raise SystemExit(f"no profile {a.name!r}; available: {', '.join(names) or 'none'}")
+    if os.path.exists(CONFIG) and not filecmp.cmp(src, CONFIG, shallow=False) and not a.force:
+        raise SystemExit("factory/config.json differs from the profile; re-run with --force to replace it")
+    in_flight = [j["id"] for j in load()["jobs"] if j["stage"] in IN_FLIGHT] if os.path.exists(BOARD) else []
+    if in_flight and not a.force:
+        raise SystemExit(f"jobs in flight ({', '.join(in_flight)}); finish them or use --force")
+    shutil.copyfile(src, CONFIG)
+    print(f"installed profile {a.name} -> factory/config.json")
+    print("now edit factory/config.json: project, tests and reviewer focus for this repo")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -301,10 +345,13 @@ def main(argv=None):
         ("pr", cmd_pr, ["id", "url"]),
         ("status", cmd_status, []),
         ("worktrees", cmd_worktrees, []),
+        ("profile", cmd_profile, ["name"]),
     ]:
         sp = sub.add_parser(name)
         for arg in args:
             sp.add_argument(arg)
+        if name == "profile":
+            sp.add_argument("--force", action="store_true")
         sp.set_defaults(fn=fn)
     a = p.parse_args(argv)
     a.fn(a)

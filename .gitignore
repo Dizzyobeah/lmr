@@ -56,3 +56,4 @@ factory/jobs/*
 # Python
 __pycache__/
 .claude/worktrees/
+factory/board.json

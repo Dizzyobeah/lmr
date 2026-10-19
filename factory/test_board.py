@@ -106,7 +106,7 @@ assert run("decide", "002-b").strip() == "ESCALATE"
 assert job("002-b")["stage"] == "needs-human"
 
 # tests line, PR
-run("tests", "002-b", "ok  internal/admin 1.2s")
+run("tests", "002-b", "ok  all packages 1.2s")
 assert job("002-b")["tests"].startswith("ok")
 run("pr", "002-b", "https://github.com/o/r/pull/9")
 assert job("002-b")["stage"] == "pr-open" and job("002-b")["pr"].endswith("/9")
@@ -116,4 +116,58 @@ try:
 except SystemExit:
     pass
 assert job("002-b")["updated"].endswith("Z")
+# board.json carries the reviewer list for the dashboard
+assert json.load(open(board.BOARD))["reviewers"] == board.DEFAULT_REVIEWERS
+
+# ---- custom reviewer set from config.json (nothing hard-coded) ----------------
+import subprocess  # noqa: E402
+
+tmp2 = tempfile.mkdtemp()
+cfg = {"reviewers": [{"key": "data-contract", "label": "contract"},
+                     {"key": "data-quality", "label": "dq"},
+                     {"key": "code", "label": "code", "runs_tests": True}],
+       "max_rounds": 3}
+open(os.path.join(tmp2, "config.json"), "w").write(json.dumps(cfg))
+open(os.path.join(tmp2, "backlog.md"), "w").write("# backlog\n")  # no board.json: must be created
+here = os.path.dirname(os.path.abspath(__file__))
+
+
+def run2(*argv, ok=True):
+    r = subprocess.run([sys.executable, os.path.join(here, "board.py"), *argv],
+                       env={**os.environ, "FACTORY_DIR": tmp2}, capture_output=True, text=True)
+    assert (r.returncode == 0) == ok, (argv, r.stdout, r.stderr)
+    return r.stdout
+
+
+run2("create", "001-x", "X")
+run2("stage", "001-x", "build")
+run2("start-review", "001-x")
+b2 = json.load(open(os.path.join(tmp2, "board.json")))
+assert b2["reviewers"] == [["data-contract", "contract"], ["data-quality", "dq"], ["code", "code"]]
+assert list(b2["jobs"][0]["reviews"]) == ["data-contract", "data-quality", "code"]
+for k in ["data-contract", "data-quality", "code"]:
+    path = os.path.join(tmp2, "jobs", "001-x", "round-1", f"review-{k}.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").write("VERDICT: CHANGES\n- [introduced] x (a.sql:1)\n")
+assert "round complete" in run2("sync", "001-x")
+run2("next-round", "001-x")
+run2("start-review", "001-x")
+run2("next-round", "001-x")  # max_rounds 3 from config allows a third round
+run2("start-review", "001-x")
+run2("next-round", "001-x", ok=False)
+
+# duplicate reviewer keys are rejected
+open(os.path.join(tmp2, "config.json"), "w").write(json.dumps({"reviewers": [{"key": "a"}, {"key": "a"}]}))
+run2("status", ok=False)
+
+# ---- profile install -----------------------------------------------------------
+os.makedirs(os.path.join(tmp2, "profiles", "demo"))
+open(os.path.join(tmp2, "profiles", "demo", "config.json"), "w").write(json.dumps(cfg))
+open(os.path.join(tmp2, "config.json"), "w").write(json.dumps(cfg) + " ")  # differs
+open(os.path.join(tmp2, "board.json"), "w").write('{"jobs": []}')
+run2("profile", "nope", ok=False)
+run2("profile", "demo", ok=False)          # refuses to overwrite a changed config
+run2("profile", "demo", "--force")
+assert open(os.path.join(tmp2, "config.json")).read() == json.dumps(cfg)
+
 print("ok: board.py self-check passed")

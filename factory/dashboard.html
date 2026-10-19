@@ -53,7 +53,7 @@
   .card .title { font-weight: 600; margin: 2px 0 6px; overflow-wrap: anywhere; }
   .card .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
   .rounds { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
-  .round { display: flex; align-items: center; gap: 4px; }
+  .round { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
   .round .r { width: 22px; color: var(--muted); font-size: 11px; }
   .chip { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--pending-bg);
     color: var(--pending); border: 1px solid transparent; }
@@ -113,7 +113,8 @@ const STAGES = [
   ["spec", "Spec"], ["build", "Build"], ["review", "Review"],
   ["approve", "Approve"], ["pr-open", "PR open"], ["merged", "Merged"], ["needs-human", "Needs human"],
 ];
-const REVIEWERS = [["security", "sec"], ["ux", "ux"], ["ui", "ui"], ["code", "code"]];
+// Reviewer chips come from board.json (`reviewers`, written by board.py from config.json).
+let REVIEWERS = [["security", "sec"], ["ux", "ux"], ["ui", "ui"], ["code", "code"]];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 let lastText = "", jobs = [], openId = null;
@@ -128,6 +129,7 @@ async function poll() {
     if (text === lastText) return;
     lastText = text;
     jobs = board.jobs || [];
+    if (Array.isArray(board.reviewers) && board.reviewers.length) REVIEWERS = board.reviewers;
     render();
     if (openId) openJob(openId, true);
   } catch (e) {
