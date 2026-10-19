@@ -224,4 +224,39 @@ assert "stale-scratch  001-x-scratch-code" in out, out
 assert "stale-scratch  002-y-scratch-security" in out, out
 assert "stale-scratch  001-x " not in out, out  # the job's own worktree is not a scratch copy
 
+# ---- D3: follow-ups dedupe by location (real wording from job 007) ---------------
+assert board.location_key("internal/admin/handler.go:233 `handleChatAPI` decodes r.Body") == ("internal/admin/handler.go", 233)
+assert board.location_key("(low) internal/admin/handler.go:377-378, 660: forms") == ("internal/admin/handler.go", 377)
+assert board.location_key("internal/server/server.go:146: the 400 path echoes") == ("internal/server/server.go", 146)
+assert board.location_key("The limit applies only to the group with the API routes.") is None
+assert board.location_key("see server.port:8080 in the config") is None  # not a file
+
+tmp3 = tempfile.mkdtemp()
+open(os.path.join(tmp3, "backlog.md"), "w").write("# backlog\n")
+env3 = {**os.environ, "FACTORY_DIR": tmp3}
+def run3(*argv):
+    r = subprocess.run([sys.executable, os.path.join(here, "board.py"), *argv], env=env3, capture_output=True, text=True)
+    assert r.returncode == 0, (argv, r.stdout, r.stderr)
+    return r
+run3("create", "020-fu", "follow-ups"); run3("stage", "020-fu", "build"); run3("start-review", "020-fu")
+rd = os.path.join(tmp3, "jobs", "020-fu", "round-1"); os.makedirs(rd, exist_ok=True)
+open(os.path.join(rd, "review-security.md"), "w").write(
+    "VERDICT: PASS\n- [pre-existing] (low) internal/admin/handler.go:233 `handleChatAPI` decodes `r.Body` without a cap.\n"
+    "- [pre-existing] (low) internal/admin/handler.go:377-378, 660: the login form uses the default 10 MB cap.\n"
+    "- [pre-existing] (low) internal/server/server.go:146: the 400 path echoes err.Error().\n")
+open(os.path.join(rd, "review-ux.md"), "w").write(
+    "VERDICT: PASS\n- [pre-existing] The limit applies only to the group with the API routes.\n")
+open(os.path.join(rd, "review-code.md"), "w").write(
+    "VERDICT: PASS\n- [pre-existing] internal/admin/handler.go:233 handleChatAPI decodes an uncapped body (out of scope).\n")
+r = run3("followups", "020-fu")
+assert "3 follow-up(s) added" in r.stdout and "1 duplicate(s) skipped" in r.stdout, r.stdout
+assert "no path:line" in r.stderr and "ux review" in r.stderr, r.stderr
+lines = [l for l in open(os.path.join(tmp3, "backlog.md")).read().splitlines() if l.startswith("- [ ]")]
+assert len(lines) == 3, lines
+assert sum("handler.go:233" in l for l in lines) == 1
+assert "The limit applies only" not in "".join(lines)
+r = run3("followups", "020-fu")                      # idempotent: a second run adds nothing
+assert "0 follow-up(s) added" in r.stdout, r.stdout
+assert len([l for l in open(os.path.join(tmp3, "backlog.md")).read().splitlines() if l.startswith("- [ ]")]) == 3
+
 print("ok: board.py self-check passed")

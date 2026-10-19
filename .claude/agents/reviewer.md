@@ -47,6 +47,10 @@ Then `## Findings`. Tag every finding line `- [introduced] ...` (this diff cause
 worsened it) or `- [pre-existing] ...` (already on main). Each finding: file:line,
 impact, fix. Only `[introduced]` findings may justify `VERDICT: CHANGES`. List
 pre-existing ones too; the orchestrator queues them in the backlog automatically.
+Every `[pre-existing]` finding must start with a location, `path/to/file.go:123`, because the
+orchestrator uses it to queue the finding in the backlog and to drop duplicates. One finding
+per problem (do not describe the same line twice). A `[pre-existing]` finding without a
+`path:line` is reported with a warning and not queued.
 
 If your entry has `"runs_tests": true`, add `## Acceptance criteria` (each met or not
 met, with evidence) and a line `Tests: <exact command> -> <result summary>`. If you

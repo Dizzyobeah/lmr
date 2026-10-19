@@ -262,23 +262,45 @@ def cmd_sync(a):
         raise SystemExit("malformed verdict(s), re-run those reviewers:\n  " + "\n  ".join(bad))
 
 
+LOCATION = re.compile(r"([\w./-]+):(\d+)")
+
+
+def location_key(text):
+    """(path, first line) of the first `path:line` in a finding, or None."""
+    for m in LOCATION.finditer(text):
+        if looks_like_path(m.group(1)):
+            return (m.group(1), int(m.group(2)))
+    return None
+
+
 def cmd_followups(a):
+    """Queue [pre-existing] findings of this round in the backlog.
+
+    A finding needs a `path:line`. Two findings with the same path and first line are the same
+    problem even if worded differently, so only the first is queued (also across earlier runs)."""
     board = load()
     job = job_of(board, a.id)
     existing = open(BACKLOG).read() if os.path.exists(BACKLOG) else ""
-    added = 0
+    seen = {k for k in map(location_key, existing.splitlines()) if k}
+    added = dupes = 0
     for r in REVIEWERS:
         p = os.path.join(round_dir(job), f"review-{r}.md")
         if not os.path.exists(p):
             continue
         for text in read_findings(p)["pre-existing"]:
-            line = f"- [ ] {text} (found in {a.id}, {r} review)"
-            if text and text not in existing:
-                with open(BACKLOG, "a") as f:
-                    f.write(line + "\n")
-                existing += line + "\n"
-                added += 1
-    print(f"{added} follow-up(s) added to backlog.md")
+            key = location_key(text)
+            if key is None:
+                print(f"warning: {r} review has a [pre-existing] finding with no path:line, not queued: "
+                      f"{text[:80]}", file=sys.stderr)
+                continue
+            if key in seen:
+                dupes += 1
+                continue
+            seen.add(key)
+            with open(BACKLOG, "a") as f:
+                f.write(f"- [ ] {text} (found in {a.id}, {r} review)\n")
+            added += 1
+    print(f"{added} follow-up(s) added to backlog.md, {dupes} duplicate(s) skipped")
 
 
 def cmd_next_round(a):
