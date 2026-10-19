@@ -96,3 +96,33 @@ func TestMaxRequestBodyBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestAdminPathNormalised(t *testing.T) {
+	base := "auth:\n  enabled: false\nadmin:\n  enabled: false\n"
+	tests := []struct {
+		name string
+		path string // appended under admin:, empty means unset
+		want string
+	}{
+		{"default", "", "/admin"},
+		{"trailing slash", "  path: /ops/admin/\n", "/ops/admin"},
+		{"no leading slash", "  path: ops/admin\n", "/ops/admin"},
+		{"empty", "  path: \"\"\n", "/admin"},
+		{"root", "  path: /\n", "/admin"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte(base+tt.path), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if cfg.Admin.Path != tt.want {
+				t.Fatalf("Admin.Path = %q, want %q", cfg.Admin.Path, tt.want)
+			}
+		})
+	}
+}
