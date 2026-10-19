@@ -75,6 +75,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.read_timeout", "30s")
 	v.SetDefault("server.write_timeout", "120s")
 	v.SetDefault("server.idle_timeout", "60s")
+	v.SetDefault("server.max_request_body_bytes", 33554432) // 32 MiB
 
 	// Ollama defaults
 	v.SetDefault("ollama.endpoint", "http://localhost:11434")

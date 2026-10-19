@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -106,6 +107,7 @@ func (s *Server) setupRoutes() {
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware)
 		r.Use(rateLimiter.Middleware)
+		r.Use(maxBodyBytes(s.config.Server.MaxRequestBodyBytes))
 		
 		// OpenAI-compatible endpoints
 		r.Post("/v1/chat/completions", s.handleChatCompletions)
@@ -122,6 +124,28 @@ func (s *Server) setupRoutes() {
 	})
 	
 	s.router = r
+}
+
+// maxBodyBytes caps the request body at n bytes. Reads past the cap fail
+// with *http.MaxBytesError, which writeDecodeError turns into a 413.
+func maxBodyBytes(n int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, n)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// writeDecodeError writes 413 when the body exceeded the size cap and
+// 400 "Invalid JSON" for any other decode error.
+func writeDecodeError(w http.ResponseWriter, err error) {
+	var mbe *http.MaxBytesError
+	if errors.As(err, &mbe) {
+		openai.WriteErrorWithStatus(w, http.StatusRequestEntityTooLarge, openai.ErrRequestTooLarge(mbe.Limit))
+		return
+	}
+	openai.WriteError(w, openai.ErrInvalidRequest("Invalid JSON: "+err.Error()))
 }
 
 // Start starts the HTTP server.
@@ -257,7 +281,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req openai.ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		openai.WriteError(w, openai.ErrInvalidRequest("Invalid JSON: "+err.Error()))
+		writeDecodeError(w, err)
 		return
 	}
 	
@@ -446,7 +470,7 @@ func (s *Server) handleCompletions(w http.ResponseWriter, r *http.Request) {
 	
 	var req openai.CompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		openai.WriteError(w, openai.ErrInvalidRequest("Invalid JSON: "+err.Error()))
+		writeDecodeError(w, err)
 		return
 	}
 	
@@ -593,7 +617,7 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	var req openai.EmbeddingRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		openai.WriteError(w, openai.ErrInvalidRequest("Invalid JSON: "+err.Error()))
+		writeDecodeError(w, err)
 		return
 	}
 	
