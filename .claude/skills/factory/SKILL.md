@@ -68,9 +68,27 @@ created from `origin/main`. Never switch branches in the main checkout.
 3. Never ask a reviewer or the approver to edit files in the job worktree (for example "remove the
    middleware to see the test fail"). Experiments go in a scratch worktree
    `.claude/worktrees/<job-id>-scratch-<who>`; `board.py worktrees` lists leftovers.
-4. After an agent finishes, check its file exists. If not, re-spawn it with the same
-   prompt plus: "A previous attempt did not write the file. Writing it is your job
-   and is explicitly allowed."
+4. **Check every agent's result, then follow the recovery ladder if it is missing.** An agent
+   is done only when (a) its file exists on disk and (b) its final message starts with
+   `WROTE: <path>`. (`python3 factory/board.py sync <job-id>` prints `missing: <keys>` for
+   reviewers.) Agents have been seen finishing with their review as chat text, with no file and
+   no error, so the file is the only thing that counts.
+
+### Recovery ladder (an agent finished without its file)
+
+1. **Resume the same agent** with `SendMessage`:
+   "Your <what> is not on disk. Create <path> now with the Write tool (or with Bash if you have
+   no Write tool), then reply `WROTE: <path>`. If it fails, reply with the exact error text and
+   the exact names of the tools you can call." This keeps the agent's analysis and cost the
+   least; in job 008 it fixed a reviewer that a plain re-spawn did not.
+2. **Re-spawn once** with the original prompt plus "A previous attempt did not write the file.
+   Writing it is your job and is explicitly allowed", and use `model: opus` for that retry.
+3. **Still missing: stop and ask the user.** Never write a reviewer's, approver's or builder's
+   file yourself; text in your words is not their verdict.
+
+After every miss, whatever rung fixed it, log it:
+`python3 factory/board.py incident <job-id> <agent> "<model>: <what happened>; fixed at rung <n>"`.
+The log (`factory/jobs/<job-id>/incidents.md`) is how a pattern shows up over several jobs.
 
 ## Spawning reviewers
 
@@ -84,6 +102,7 @@ Job <job-id>, round <N>. Your reviewer key is <r.key>; your checklist is that en
 Test command that works here: <from preflight>.
 Never edit the job worktree; for experiments (e.g. a mutation check) use your own scratch
 worktree as described in reviewer.md and remove it when done.
+Finish with `ls -l` on your file and a final message of the form `WROTE: <path>, VERDICT: <PASS|CHANGES>`.
 ```
 
 ## Preflight (once per `/factory <feature>`)
