@@ -302,4 +302,47 @@ assert "reviewer-ux: sonnet" in text and "reviewer-ui: sonnet" in text and "Z re
 run5("incident", "999-nope", "reviewer-ux", "x", ok=False)             # unknown job is refused
 assert not os.path.exists(os.path.join(tmp5, "jobs", "999-nope", "incidents.md"))
 
+# ---- sync-prs: merged PRs are noticed without anyone calling `stage merged` ------------------
+tmp6 = tempfile.mkdtemp()
+fake = os.path.join(tmp6, "bin")
+os.makedirs(fake)
+open(os.path.join(fake, "gh"), "w").write(  # gh pr view <url> --json state -q .state ; the URL's last digit picks the answer
+    '#!/bin/sh\ncase "$3" in */1) echo MERGED;; */2) echo OPEN;; */3) echo CLOSED;; */4) echo oops >&2; exit 1;; esac\n')
+os.chmod(os.path.join(fake, "gh"), 0o755)
+fdir6 = os.path.join(tmp6, "factory")
+os.makedirs(fdir6)
+
+
+def run6(*argv, path=None):
+    r = subprocess.run([sys.executable, os.path.join(here, "board.py"), *argv], capture_output=True, text=True,
+                       env={**os.environ, "FACTORY_DIR": fdir6, "PATH": path or fake + os.pathsep + os.environ["PATH"]})
+    assert r.returncode == 0, (argv, r.stdout, r.stderr)
+    return r.stdout
+
+
+def stage6(jid):
+    return [j for j in json.load(open(os.path.join(fdir6, "board.json")))["jobs"] if j["id"] == jid][0]
+
+
+for jid, n in [("001-m", 1), ("002-o", 2), ("003-c", 3), ("004-e", 4)]:
+    run6("create", jid, jid)
+    run6("pr", jid, f"https://example.test/o/r/pull/{n}")
+run6("create", "005-nourl", "no pr url")
+run6("stage", "005-nourl", "pr-open")                                   # pr-open with no URL: nothing to ask
+run6("create", "006-build", "still building")
+out = run6("sync-prs")
+assert "merged: 001-m" in out and "closed-unmerged: 003-c" in out, out
+assert stage6("001-m")["stage"] == "merged" and stage6("001-m")["merged_at"].endswith("Z")
+for jid in ("002-o", "003-c", "004-e", "005-nourl"):                    # open, closed, gh error, no url: untouched
+    assert stage6(jid)["stage"] == "pr-open", jid
+assert stage6("006-build")["stage"] == "spec"
+again = run6("sync-prs")
+assert "merged: 001-m" not in again and "closed-unmerged: 003-c" in again, again  # merged is reported once
+run6("sync-prs", path="/nonexistent")                                   # no gh at all: exit 0, nothing changes
+assert stage6("002-o")["stage"] == "pr-open"
+run6("stage", "002-o", "pr-open")
+open(os.path.join(fake, "gh"), "w").write('#!/bin/sh\necho MERGED\n')  # now everything merged; `status` applies it too
+run6("status")
+assert stage6("002-o")["stage"] == "merged" and stage6("004-e")["stage"] == "merged"
+
 print("ok: board.py self-check passed")
