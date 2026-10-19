@@ -44,7 +44,7 @@ round still has CHANGES, go to the approver anyway; it will ESCALATE.
 ```
 factory/config.json                  project facts, tests, reviewers, escalation rules
 factory/profiles/<name>/config.json  ready-made configs (board.py profile <name>)
-factory/board.json                   state (board.py writes it)
+factory/board.json                   state, local and git-ignored (board.py creates and writes it)
 factory/board.py                     the only way to change state; self-check: factory/test_board.py
 factory/backlog.md                   "- [ ] feature" queue (board.py followups appends)
 factory/jobs/<job-id>/spec.md        spec-writer

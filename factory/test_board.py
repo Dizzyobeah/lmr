@@ -128,8 +128,7 @@ cfg = {"reviewers": [{"key": "data-contract", "label": "contract"},
                      {"key": "code", "label": "code", "runs_tests": True}],
        "max_rounds": 3}
 open(os.path.join(tmp2, "config.json"), "w").write(json.dumps(cfg))
-open(os.path.join(tmp2, "board.json"), "w").write('{"jobs": []}')
-open(os.path.join(tmp2, "backlog.md"), "w").write("# backlog\n")
+open(os.path.join(tmp2, "backlog.md"), "w").write("# backlog\n")  # no board.json: must be created
 here = os.path.dirname(os.path.abspath(__file__))
 
 

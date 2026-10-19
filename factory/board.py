@@ -67,8 +67,12 @@ def now():
 
 
 def load():
-    with open(BOARD) as f:
-        return json.load(f)
+    """board.json is local state (git-ignored); start empty if it doesn't exist."""
+    try:
+        with open(BOARD) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"jobs": []}
 
 
 def save(board):
