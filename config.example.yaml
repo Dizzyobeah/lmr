@@ -20,6 +20,14 @@ server:
   
   # Maximum amount of time to wait for the next request
   idle_timeout: 60s
+  
+  # Maximum request body size in bytes for the API routes (/v1/* and aliases).
+  # Larger bodies are rejected with 413 and an OpenAI-style error
+  # (code "request_too_large"). read_timeout limits slow bodies; this limits
+  # big ones. 32 MiB fits a 20 MB image (about 26.7 MB base64-encoded) plus a
+  # full 32768-token context, with headroom.
+  # Env override: SERVER_MAX_REQUEST_BODY_BYTES
+  max_request_body_bytes: 33554432
 
 # ============================================================
 # Ollama Configuration

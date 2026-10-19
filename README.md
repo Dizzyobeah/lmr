@@ -246,7 +246,8 @@ Notes:
   Ollama's `num_ctx` to 32768, so larger prompts are truncated (and very slow on
   CPU).
 - `vision: true` lets VS Code send images; the router's vision rule forwards
-  them to `llava:latest`.
+  them to `llava:latest`. Very large images can exceed
+  `server.max_request_body_bytes` (32 MiB by default) and get a 413.
 
 Restart VS Code if **Local Router (auto)** does not appear in the picker.
 
@@ -315,6 +316,7 @@ See `config.example.yaml` for all options. Key settings:
 server:
   host: "0.0.0.0"
   port: 8080
+  max_request_body_bytes: 33554432  # 32 MiB; larger API request bodies get 413
 
 ollama:
   endpoint: "http://localhost:11434"

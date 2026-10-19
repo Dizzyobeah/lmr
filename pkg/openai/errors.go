@@ -239,6 +239,17 @@ func ErrContextLengthExceeded(maxTokens int) *APIError {
 	)
 }
 
+// ErrRequestTooLarge creates a request body too large error.
+// Send it with WriteErrorWithStatus and http.StatusRequestEntityTooLarge.
+func ErrRequestTooLarge(limit int64) *APIError {
+	return NewAPIError(
+		ErrorTypeInvalidRequest,
+		fmt.Sprintf("Request body too large. Maximum size is %d bytes.", limit),
+		"",
+		"request_too_large",
+	)
+}
+
 // ErrInvalidModel creates an invalid model error.
 func ErrInvalidModel(model string) *APIError {
 	return NewAPIError(

@@ -50,6 +50,10 @@ type ServerConfig struct {
 
 	// IdleTimeout is the maximum amount of time to wait for the next request.
 	IdleTimeout time.Duration `mapstructure:"idle_timeout"`
+
+	// MaxRequestBodyBytes caps the request body size on the API routes.
+	// Larger bodies are rejected with 413.
+	MaxRequestBodyBytes int64 `mapstructure:"max_request_body_bytes"`
 }
 
 // OllamaConfig contains Ollama connection settings.
@@ -193,11 +197,12 @@ type LoggingConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Host:         "0.0.0.0",
-			Port:         8080,
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 120 * time.Second,
-			IdleTimeout:  60 * time.Second,
+			Host:                "0.0.0.0",
+			Port:                8080,
+			ReadTimeout:         30 * time.Second,
+			WriteTimeout:        120 * time.Second,
+			IdleTimeout:         60 * time.Second,
+			MaxRequestBodyBytes: 32 << 20,
 		},
 		Ollama: OllamaConfig{
 			Endpoint:        "http://localhost:11434",
@@ -270,6 +275,9 @@ func (c *Config) Validate() error {
 	// Server validation
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		errors = append(errors, "server.port must be between 1 and 65535")
+	}
+	if c.Server.MaxRequestBodyBytes <= 0 {
+		errors = append(errors, "server.max_request_body_bytes must be greater than 0")
 	}
 
 	// Ollama validation
