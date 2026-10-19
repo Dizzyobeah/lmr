@@ -16,7 +16,9 @@ Replaces hand-edited board.json. Every write validates the stage, sets `updated`
   board.py decide <id>                  read decision.md: APPROVE|ESCALATE (ESCALATE -> needs-human)
   board.py tests <id> "<summary line>"  record the test result shown on the card
   board.py pr <id> <url>                record the PR, stage pr-open
-  board.py status                       refresh ahead/behind origin/main for open jobs
+  board.py status                       refresh ahead/behind origin/main for open jobs, then sync-prs
+  board.py sync-prs                     mark pr-open jobs whose PR is merged on GitHub as merged (needs gh)
+  board.py serve [--port N] [--interval S]  serve the dashboard and run sync-prs every S seconds
   board.py worktrees                    list job worktrees that can be removed
   board.py profile <name> [--force]     install factory/profiles/<name>/config.json as factory/config.json
 
@@ -25,12 +27,16 @@ Reviewers and the round limit come from factory/config.json (`reviewers`, `max_r
 import argparse
 import datetime
 import filecmp
+import functools
+import http.server
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 
 HERE = os.environ.get("FACTORY_DIR") or os.path.dirname(os.path.abspath(__file__))
 BOARD = os.path.join(HERE, "board.json")
@@ -78,7 +84,7 @@ def load():
 
 def save(board):
     board["reviewers"] = REVIEWER_LABELS  # the dashboard draws its chips from this
-    tmp = BOARD + ".tmp"
+    tmp = f"{BOARD}.{os.getpid()}.tmp"  # per process: the serve thread and a command may save together
     with open(tmp, "w") as f:
         json.dump(board, f, indent=2)
         f.write("\n")
@@ -377,8 +383,76 @@ def git(*args):
     return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True)
 
 
+def pr_state(url):
+    """OPEN, MERGED or CLOSED from GitHub, or None when gh can't tell (missing, offline, not logged in)."""
+    try:
+        r = subprocess.run(["gh", "pr", "view", url, "--json", "state", "-q", ".state"],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    state = r.stdout.strip()
+    return state if r.returncode == 0 and state in ("OPEN", "MERGED", "CLOSED") else None
+
+
+def sync_prs():
+    """Mark pr-open jobs whose PR merged as merged. Returns (merged ids, closed-unmerged ids).
+
+    Ask GitHub first, then reload and apply: the slow gh calls never hold a stale copy of the
+    board, so a command saving in the meantime is not overwritten.
+    """
+    # ponytail: reload-then-save is not locked; a lost update needs a save inside those few ms.
+    # Upgrade to a lock file if it ever happens.
+    states = {j["id"]: pr_state(j["pr"]) for j in load()["jobs"] if j["stage"] == "pr-open" and j.get("pr")}
+    board = load()
+    merged, closed = [], []
+    for job in board["jobs"]:
+        state = states.get(job["id"])
+        if job["stage"] != "pr-open" or state is None:
+            continue
+        if state == "MERGED":
+            job.update(stage="merged", merged_at=now())
+            touch(job)
+            merged.append(job["id"])
+        elif state == "CLOSED":
+            closed.append(job["id"])
+    if merged:
+        save(board)
+    return merged, closed
+
+
+def cmd_sync_prs(a):
+    merged, closed = sync_prs()
+    for jid in merged:
+        print(f"merged: {jid}")
+    for jid in closed:
+        print(f"closed-unmerged: {jid}")
+    if not merged and not closed:
+        print("no PR changes")
+
+
+def cmd_serve(a):
+    """The dashboard plus a loop that keeps merged PRs current, so it needs no /factory command."""
+    def loop():
+        while True:
+            try:
+                sync_prs()
+            except Exception as e:  # keep serving; the next tick retries
+                print(f"sync-prs failed: {e}", file=sys.stderr)
+            time.sleep(a.interval)
+
+    threading.Thread(target=loop, daemon=True).start()
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=HERE)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", a.port), handler)
+    print(f"http://localhost:{a.port}/dashboard.html  (merged PRs checked every {a.interval}s)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
 def cmd_status(a):
     git("fetch", "-q", "origin")
+    sync_prs()
     board = load()
     for job in board["jobs"]:
         if job["stage"] == "merged":
@@ -443,6 +517,8 @@ def main(argv=None):
         ("tests", cmd_tests, ["id", "summary"]),
         ("pr", cmd_pr, ["id", "url"]),
         ("status", cmd_status, []),
+        ("sync-prs", cmd_sync_prs, []),
+        ("serve", cmd_serve, []),
         ("worktrees", cmd_worktrees, []),
         ("profile", cmd_profile, ["name"]),
     ]:
@@ -451,6 +527,9 @@ def main(argv=None):
             sp.add_argument(arg)
         if name == "profile":
             sp.add_argument("--force", action="store_true")
+        if name == "serve":
+            sp.add_argument("--port", type=int, default=8765)
+            sp.add_argument("--interval", type=int, default=30)
         sp.set_defaults(fn=fn)
     a = p.parse_args(argv)
     a.fn(a)

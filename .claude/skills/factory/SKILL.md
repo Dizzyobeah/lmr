@@ -19,6 +19,12 @@ of every command. To re-target the factory, edit that file or install a profile:
 Paths: `ROOT` = `git rev-parse --show-toplevel` (the main checkout). Give agents
 absolute paths built from it.
 
+**First step of every command:** run `python3 factory/board.py sync-prs`. It asks GitHub
+about every `pr-open` job and marks the merged ones `merged` (`merged: <job-id>`). Tell the
+user about any `merged:` line, and about any `closed-unmerged: <job-id>` line (a PR closed
+without merging; it stays `pr-open` until the user decides). If `gh` can't answer, nothing
+changes and the command still succeeds.
+
 ## The loop (edit this to change the factory)
 
 ```
@@ -44,7 +50,8 @@ round still has CHANGES, go to the approver anyway; it will ESCALATE.
 ```
 factory/config.json                  project facts, tests, reviewers, escalation rules
 factory/profiles/<name>/config.json  ready-made configs (board.py profile <name>)
-factory/board.json                   state, local and git-ignored (board.py creates and writes it)
+factory/board.json                   state, local and git-ignored (board.py creates and writes it;
+                                     jobs get `merged_at` when their PR is seen merged)
 factory/board.py                     the only way to change state; self-check: factory/test_board.py
 factory/backlog.md                   "- [ ] feature" queue; local and git-ignored, created from
                                      factory/backlog.example.md (board.py followups appends)
@@ -166,8 +173,8 @@ If nothing is unchecked, say the backlog is empty.
 Run `python3 factory/board.py status` (refreshes ahead/behind `origin/main`) and
 `python3 factory/board.py worktrees`. Then give the user a short summary:
 - **In flight:** job, stage, round, verdicts so far.
-- **Open PRs:** job and URL. Check each with `gh pr view <url> --json state`, and if
-  it's merged run `python3 factory/board.py stage <job-id> merged`.
+- **Open PRs:** job and URL, for the jobs still `pr-open` after `board.py status` (which
+  runs `sync-prs`, so merged PRs are already marked `merged`).
 - **Needs human:** job, and the "For the human" lines from decision.md.
 - **Worktrees:** the `remove` lines from `board.py worktrees`. Offer to remove them;
   don't remove without asking.
@@ -211,12 +218,14 @@ round's verdicts, the decision, and the test summary line from build.md.
 Then `python3 factory/board.py pr <job-id> <PR url>` (sets stage `pr-open`).
 
 Tell the user the PR URL. `stage: "merged"` is set only when the PR is merged on
-GitHub, which is the user's action (`/factory status` notices it). Leave the
+GitHub, which is the user's action (`board.py sync-prs` notices it). Leave the
 worktree in place until then.
 
 ## Dashboard
 
-`cd factory && python3 -m http.server 8765`, then open
-http://localhost:8765/dashboard.html. Mention this the first time you run.
+`python3 factory/board.py serve`, then open
+http://localhost:8765/dashboard.html. Mention this the first time you run. The server
+also runs `sync-prs` every 30 seconds (`--interval`), so cards move to Merged without a
+/factory command; `--port` changes the port.
 Cards show one verdict chip per configured reviewer and round, the test result,
 ahead/behind `origin/main`, and the PR link.

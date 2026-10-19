@@ -134,7 +134,7 @@ async function poll() {
     if (openId) openJob(openId, true);
   } catch (e) {
     $("status").className = "status off";
-    $("status").textContent = "can't read board.json (serve this folder: python3 -m http.server 8765)";
+    $("status").textContent = "can't read board.json (serve it with: python3 factory/board.py serve)";
   }
 }
 
