@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 	"github.com/kalle/local-model-router/internal/gemini"
 	"github.com/kalle/local-model-router/internal/ollama"
 	"github.com/kalle/local-model-router/pkg/openai"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const testGeminiKey = "secret-gemini-key"
@@ -283,4 +286,90 @@ func TestGeminiFallback(t *testing.T) {
 			t.Fatalf("status %d, gemini calls %d, ollama calls %d", rec.Code, gc.calls, *oc)
 		}
 	})
+}
+
+func TestGeminiKeyNeverLeaks(t *testing.T) {
+	var logBuf bytes.Buffer
+	prev := log.Logger
+	log.Logger = zerolog.New(&logBuf)
+	t.Cleanup(func() { log.Logger = prev })
+
+	var targetCalls int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&targetCalls, 1)
+	}))
+	t.Cleanup(target.Close)
+
+	var calls int32
+	var firstAuth atomic.Value
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			firstAuth.Store(r.Header.Get("Authorization"))
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = r.Header.Write(w) // echo request headers, key included
+			return
+		}
+		http.Redirect(w, r, target.URL+"/chat/completions", http.StatusFound)
+	}))
+	t.Cleanup(upstream.Close)
+
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+
+	o, _ := fakeOllamaChat(t)
+	chat := `{"model":"auto","messages":[{"role":"user","content":"hi"}]}`
+	var out strings.Builder
+	for _, step := range []struct{ name, url string }{
+		{"500 echoing headers", upstream.URL},
+		{"302 redirect", upstream.URL},
+		{"transport error", closed.URL},
+	} {
+		s := newGeminiTestServer(t, step.url, o.URL, 1, "llama3.2")
+		rec := postChat(s, chat)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "from ollama") {
+			t.Fatalf("%s: want Ollama fallback, got %d %s", step.name, rec.Code, rec.Body)
+		}
+		_ = rec.Result().Header.Write(&out)
+		out.WriteString(rec.Body.String())
+	}
+
+	s := newGeminiTestServer(t, upstream.URL, o.URL, 1, "llama3.2")
+	s.config.Routing.ForceRouting = false
+	rec := httptest.NewRecorder()
+	s.handleListModels(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	if !strings.Contains(rec.Body.String(), "gemini-2.5-flash") {
+		t.Fatalf("models missing gemini: %s", rec.Body)
+	}
+	_ = rec.Result().Header.Write(&out)
+	out.WriteString(rec.Body.String())
+
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("upstream calls = %d, want 2", got)
+	}
+	if got, _ := firstAuth.Load().(string); got != "Bearer "+testGeminiKey {
+		t.Fatalf("first upstream Authorization = %q", got)
+	}
+	if got := atomic.LoadInt32(&targetCalls); got != 0 {
+		t.Fatalf("redirect target got %d requests, want 0", got)
+	}
+	if strings.Contains(logBuf.String(), testGeminiKey) {
+		t.Fatalf("key in logs: %s", logBuf.String())
+	}
+	if !strings.Contains(logBuf.String(), "Gemini request failed") {
+		t.Fatalf("log capture not working: %q", logBuf.String())
+	}
+	if strings.Contains(out.String(), testGeminiKey) {
+		t.Fatalf("key in client responses: %s", out.String())
+	}
+}
+
+func TestGeminiDisabledChatTrailingData(t *testing.T) {
+	o, oc := fakeOllamaChat(t)
+	s := newGeminiTestServer(t, "https://unused.invalid", o.URL, 1, "llama3.2")
+	s.geminiClient = nil
+	s.config.Gemini.Enabled = false
+	rec := postChat(s, `{"model":"auto","messages":[{"role":"user","content":"hi"}]} xyz`)
+	if rec.Code != http.StatusOK || atomic.LoadInt32(oc) != 1 {
+		t.Fatalf("status %d, ollama calls %d, body %s", rec.Code, *oc, rec.Body)
+	}
 }

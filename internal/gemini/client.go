@@ -4,6 +4,7 @@ package gemini
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"time"
@@ -30,11 +31,17 @@ func NewClient(endpoint, apiKey string, timeout time.Duration) *Client {
 		IdleConnTimeout:       90 * time.Second,
 		ForceAttemptHTTP2:     true,
 		ResponseHeaderTimeout: timeout,
+		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 	return &Client{
 		endpoint: endpoint,
 		apiKey:   apiKey,
-		http:     &http.Client{Transport: transport},
+		http: &http.Client{
+			Transport: transport,
+			// Never follow redirects: Go would resend Authorization to a
+			// same-host target, possibly over plain http. A 3xx is a failure.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 	}
 }
 

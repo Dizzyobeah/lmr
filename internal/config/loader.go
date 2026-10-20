@@ -46,6 +46,11 @@ func Load(configPath string) (*Config, error) {
 		// Config file not found is okay, we'll use defaults and env vars
 	}
 
+	// The Gemini key is env-only; a key in the file is a leak waiting to happen.
+	if v.InConfig("gemini.api_key") {
+		return nil, fmt.Errorf("gemini.api_key must not be set in the config file; use GEMINI_API_KEY")
+	}
+
 	// Unmarshal into config struct
 	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
@@ -61,6 +66,7 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	cfg.Gemini.Endpoint = strings.TrimRight(cfg.Gemini.Endpoint, "/")
+	cfg.Gemini.APIKey = strings.TrimSpace(cfg.Gemini.APIKey)
 
 	// Validate
 	if err := cfg.Validate(); err != nil {

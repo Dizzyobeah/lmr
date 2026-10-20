@@ -2,6 +2,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -292,7 +293,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req openai.ChatCompletionRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	// Decoder, not Unmarshal: trailing data after the object is ignored, as on main.
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&req); err != nil {
 		writeDecodeError(w, err)
 		return
 	}

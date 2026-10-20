@@ -139,9 +139,21 @@ func TestGeminiConfig(t *testing.T) {
 	}{
 		{"disabled default no key", "", "", "", "https://generativelanguage.googleapis.com/v1beta/openai"},
 		{"enabled with env key", "gemini:\n  enabled: true\n", "k", "", "https://generativelanguage.googleapis.com/v1beta/openai"},
+		{"env key trimmed", "gemini:\n  enabled: true\n", " k\n", "", "https://generativelanguage.googleapis.com/v1beta/openai"},
 		{"enabled no key", "gemini:\n  enabled: true\n", "", "GEMINI_API_KEY", ""},
-		{"trailing slash trimmed", "gemini:\n  enabled: true\n  endpoint: http://x/v1/\n", "k", "", "http://x/v1"},
+		{"trailing slash trimmed", "gemini:\n  enabled: true\n  endpoint: https://x/v1/\n", "k", "", "https://x/v1"},
 		{"empty model", "gemini:\n  enabled: true\n  model: \"\"\n", "k", "gemini.model", ""},
+		{"http endpoint", "gemini:\n  enabled: true\n  endpoint: http://x/v1\n", "k", "gemini.endpoint", ""},
+		{"userinfo endpoint", "gemini:\n  enabled: true\n  endpoint: https://u:p@x/v1\n", "k", "gemini.endpoint", ""},
+		{"query endpoint", "gemini:\n  enabled: true\n  endpoint: https://x/v1?key=k\n", "k", "gemini.endpoint", ""},
+		{"force query endpoint", "gemini:\n  enabled: true\n  endpoint: https://x/v1?\n", "k", "gemini.endpoint", ""},
+		{"fragment endpoint", "gemini:\n  enabled: true\n  endpoint: https://x/v1#f\n", "k", "gemini.endpoint", ""},
+		{"ftp endpoint", "gemini:\n  enabled: true\n  endpoint: ftp://x/v1\n", "k", "gemini.endpoint", ""},
+		{"no host endpoint", "gemini:\n  enabled: true\n  endpoint: https:///v1\n", "k", "gemini.endpoint", ""},
+		{"disabled http endpoint not checked", "gemini:\n  endpoint: http://x/v1\n", "", "", "http://x/v1"},
+		{"key in file", "gemini:\n  enabled: true\n  api_key: filekey\n", "k", "gemini.api_key must not be set in the config file; use GEMINI_API_KEY", ""},
+		{"key in file while disabled", "gemini:\n  api_key: filekey\n", "", "gemini.api_key must not be set in the config file; use GEMINI_API_KEY", ""},
+		{"whitespace key enabled", "gemini:\n  enabled: true\n", "  ", "GEMINI_API_KEY", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -160,7 +172,7 @@ func TestGeminiConfig(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if cfg.Gemini.APIKey != tt.key {
+			if cfg.Gemini.APIKey != strings.TrimSpace(tt.key) {
 				t.Fatalf("APIKey = %q, want %q", cfg.Gemini.APIKey, tt.key)
 			}
 			if cfg.Gemini.Endpoint != tt.endpoint || cfg.Gemini.Model != "gemini-2.5-flash" || cfg.Gemini.Priority != 0 || cfg.Gemini.Timeout != 120*time.Second {

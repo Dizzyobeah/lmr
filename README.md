@@ -357,7 +357,11 @@ gemini:
 
 Set the key with the `GEMINI_API_KEY` env var (Docker Compose passes it
 through); it is never read from the config file. Startup fails if Gemini is
-enabled without it.
+enabled without it, and if the config file contains `gemini.api_key` at all.
+
+`gemini.endpoint` must be an `https://` URL without credentials, query or
+fragment; anything else fails at startup. The router never follows redirects
+from Gemini: a 3xx counts as a failed request and falls back like any error.
 
 Routing rules:
 - `priority > 0`: Gemini is tried first. If it errors or returns 429, the

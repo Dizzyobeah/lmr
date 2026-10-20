@@ -61,11 +61,13 @@ ollama:
 # ============================================================
 # WARNING: when enabled, chat prompts (including images) are sent to Google.
 # Stage 1 covers /v1/chat/completions only; completions and embeddings stay on
-# Ollama. The API key is read only from the GEMINI_API_KEY env var.
+# Ollama. The API key is read only from the GEMINI_API_KEY env var; an
+# api_key entry in this file is rejected at startup.
 gemini:
   enabled: false
 
-  # Gemini's OpenAI-compatible base URL (no trailing slash needed).
+  # Gemini's OpenAI-compatible base URL (no trailing slash needed). Must be
+  # https, with no credentials (user:pass@) and no query or fragment.
   endpoint: "https://generativelanguage.googleapis.com/v1beta/openai"
 
   # The Gemini model used for chat. With force_routing: false, a request for

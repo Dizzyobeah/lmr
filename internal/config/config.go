@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -325,6 +326,9 @@ func (c *Config) Validate() error {
 		}
 		if c.Gemini.Endpoint == "" {
 			errors = append(errors, "gemini.endpoint is required when gemini is enabled")
+		} else if u, err := url.Parse(c.Gemini.Endpoint); err != nil || u.Scheme != "https" || u.Host == "" ||
+			u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+			errors = append(errors, "gemini.endpoint must be an https URL without credentials or query")
 		}
 		if c.Gemini.Model == "" {
 			errors = append(errors, "gemini.model is required when gemini is enabled")
