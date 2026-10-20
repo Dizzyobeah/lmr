@@ -14,6 +14,7 @@ import (
 	"github.com/kalle/local-model-router/internal/admin"
 	"github.com/kalle/local-model-router/internal/classifier"
 	"github.com/kalle/local-model-router/internal/config"
+	"github.com/kalle/local-model-router/internal/gemini"
 	"github.com/kalle/local-model-router/internal/keystore"
 	"github.com/kalle/local-model-router/internal/metrics"
 	"github.com/kalle/local-model-router/internal/ollama"
@@ -111,8 +112,19 @@ func main() {
 		adminHandler = admin.NewHandler(&cfg.Admin, keyStore, modelCache, ollamaClient, modelRouter)
 	}
 
+	// Gemini client (optional chat backend; never log the key)
+	var geminiClient *gemini.Client
+	if cfg.Gemini.Enabled {
+		geminiClient = gemini.NewClient(cfg.Gemini.Endpoint, cfg.Gemini.APIKey, cfg.Gemini.Timeout)
+	}
+	log.Info().
+		Bool("gemini_enabled", cfg.Gemini.Enabled).
+		Str("gemini_model", cfg.Gemini.Model).
+		Int("gemini_priority", cfg.Gemini.Priority).
+		Msg("Gemini backend")
+
 	// HTTP server
-	srv := server.NewServer(cfg, ollamaClient, modelCache, keyStore, classifierInstance, modelRouter, adminHandler)
+	srv := server.NewServer(cfg, ollamaClient, geminiClient, modelCache, keyStore, classifierInstance, modelRouter, adminHandler)
 
 	log.Info().
 		Str("address", cfg.Server.Address()).

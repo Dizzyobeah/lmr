@@ -57,6 +57,31 @@ ollama:
   num_ctx: 32768
 
 # ============================================================
+# Google Gemini (optional chat backend)
+# ============================================================
+# WARNING: when enabled, chat prompts (including images) are sent to Google.
+# Stage 1 covers /v1/chat/completions only; completions and embeddings stay on
+# Ollama. The API key is read only from the GEMINI_API_KEY env var.
+gemini:
+  enabled: false
+
+  # Gemini's OpenAI-compatible base URL (no trailing slash needed).
+  endpoint: "https://generativelanguage.googleapis.com/v1beta/openai"
+
+  # The Gemini model used for chat. With force_routing: false, a request for
+  # this model name always goes to Gemini first.
+  model: "gemini-2.5-flash"
+
+  # Order between Gemini and Ollama (Ollama is fixed at 0 and wins ties):
+  #   > 0   Gemini first; on error or 429, fall back to Ollama.
+  #         A request for an installed Ollama model by name still goes to Ollama.
+  #   <= 0  Ollama first; Gemini is used only when Ollama has no model.
+  priority: 0
+
+  # Time-to-first-byte budget; does not cap streamed responses.
+  timeout: 120s
+
+# ============================================================
 # Authentication Configuration
 # ============================================================
 auth:

@@ -342,6 +342,36 @@ routing:
       prefer_models: ["deepseek-coder", "codellama"]
 ```
 
+### Using Google Gemini
+
+The router can send chat completions to Google Gemini through its
+OpenAI-compatible endpoint. It is off by default. **When enabled, prompts
+(including images) leave your host and are sent to Google.**
+
+```yaml
+gemini:
+  enabled: true
+  model: "gemini-2.5-flash"
+  priority: 1   # > 0: Gemini first; <= 0: Gemini only when Ollama has no model
+```
+
+Set the key with the `GEMINI_API_KEY` env var (Docker Compose passes it
+through); it is never read from the config file. Startup fails if Gemini is
+enabled without it.
+
+Routing rules:
+- `priority > 0`: Gemini is tried first. If it errors or returns 429, the
+  request falls back to Ollama. A request that names an installed Ollama
+  model (with `force_routing: false`) still goes to Ollama.
+- `priority <= 0` (default): Ollama is tried first; Gemini answers only when
+  Ollama has no model, instead of a 404.
+- With `force_routing: false`, requesting the Gemini model by name sends the
+  request to Gemini first, and `/v1/models` lists it with `owned_by: "google"`.
+- If both fail, you get an OpenAI-shaped error (429 stays 429).
+
+Stage 1 covers `/v1/chat/completions` only (streaming and non-streaming);
+completions and embeddings always use Ollama.
+
 ## Admin Dashboard
 
 Access the admin UI at `http://localhost:8080/admin`:

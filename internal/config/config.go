@@ -15,6 +15,9 @@ type Config struct {
 	// Ollama contains Ollama connection settings.
 	Ollama OllamaConfig `mapstructure:"ollama"`
 
+	// Gemini contains Google Gemini backend settings.
+	Gemini GeminiConfig `mapstructure:"gemini"`
+
 	// Auth contains authentication settings.
 	Auth AuthConfig `mapstructure:"auth"`
 
@@ -72,6 +75,28 @@ type OllamaConfig struct {
 
 	// NumCtx is the context window (num_ctx) sent to Ollama on chat requests.
 	NumCtx int `mapstructure:"num_ctx"`
+}
+
+// GeminiConfig contains settings for the Google Gemini OpenAI-compatible backend.
+type GeminiConfig struct {
+	// Enabled turns on Gemini as a chat backend. Prompts are sent to Google.
+	Enabled bool `mapstructure:"enabled"`
+
+	// Endpoint is the OpenAI-compatible base URL (no trailing slash).
+	Endpoint string `mapstructure:"endpoint"`
+
+	// APIKey is the Gemini API key (from the GEMINI_API_KEY env var).
+	APIKey string `mapstructure:"api_key"`
+
+	// Model is the Gemini model used for chat completions.
+	Model string `mapstructure:"model"`
+
+	// Priority above 0 sends chat to Gemini before Ollama; 0 or below makes
+	// Gemini a fallback used only when Ollama has no model.
+	Priority int `mapstructure:"priority"`
+
+	// Timeout is the response-header (time-to-first-byte) budget.
+	Timeout time.Duration `mapstructure:"timeout"`
 }
 
 // AuthConfig contains authentication settings.
@@ -211,6 +236,11 @@ func DefaultConfig() *Config {
 			RefreshInterval: 5 * time.Minute,
 			NumCtx:          32768,
 		},
+		Gemini: GeminiConfig{
+			Endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
+			Model:    "gemini-2.5-flash",
+			Timeout:  120 * time.Second,
+		},
 		Auth: AuthConfig{
 			Enabled: true,
 		},
@@ -286,6 +316,19 @@ func (c *Config) Validate() error {
 	}
 	if c.Ollama.NumCtx <= 0 {
 		errors = append(errors, "ollama.num_ctx must be greater than 0")
+	}
+
+	// Gemini validation
+	if c.Gemini.Enabled {
+		if c.Gemini.APIKey == "" {
+			errors = append(errors, "gemini.api_key is required when gemini is enabled (set GEMINI_API_KEY env var)")
+		}
+		if c.Gemini.Endpoint == "" {
+			errors = append(errors, "gemini.endpoint is required when gemini is enabled")
+		}
+		if c.Gemini.Model == "" {
+			errors = append(errors, "gemini.model is required when gemini is enabled")
+		}
 	}
 
 	// Auth validation

@@ -26,6 +26,7 @@ func Load(configPath string) (*Config, error) {
 	v.BindEnv("auth.encryption_key", "AUTH_ENCRYPTION_KEY")
 	v.BindEnv("admin.password", "ADMIN_PASSWORD")
 	v.BindEnv("ollama.endpoint", "OLLAMA_ENDPOINT")
+	v.BindEnv("gemini.api_key", "GEMINI_API_KEY")
 
 	// Load config file
 	if configPath != "" {
@@ -59,6 +60,8 @@ func Load(configPath string) (*Config, error) {
 		cfg.Admin.Path = "/" + cfg.Admin.Path
 	}
 
+	cfg.Gemini.Endpoint = strings.TrimRight(cfg.Gemini.Endpoint, "/")
+
 	// Validate
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -91,6 +94,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ollama.max_connections", 100)
 	v.SetDefault("ollama.refresh_interval", "5m")
 	v.SetDefault("ollama.num_ctx", 32768)
+
+	// Gemini defaults
+	v.SetDefault("gemini.enabled", false)
+	v.SetDefault("gemini.endpoint", "https://generativelanguage.googleapis.com/v1beta/openai")
+	v.SetDefault("gemini.model", "gemini-2.5-flash")
+	v.SetDefault("gemini.priority", 0)
+	v.SetDefault("gemini.timeout", "120s")
 
 	// Auth defaults
 	v.SetDefault("auth.enabled", true)
