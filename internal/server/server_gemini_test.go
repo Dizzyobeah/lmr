@@ -250,6 +250,18 @@ func TestGeminiFallback(t *testing.T) {
 		}
 	})
 
+	t.Run("null body does not panic", func(t *testing.T) {
+		g, gc := fakeGemini(t, http.StatusOK, `{"id":"x","choices":[]}`, false)
+		s := newGeminiTestServer(t, g.URL, "http://127.0.0.1:1", 1)
+		rec := postChat(s, `null`)
+		if rec.Code != http.StatusOK || atomic.LoadInt32(&gc.calls) != 1 {
+			t.Fatalf("status %d, gemini calls %d", rec.Code, gc.calls)
+		}
+		if string(gc.body) != `{"model":"gemini-2.5-flash"}` {
+			t.Fatalf("upstream body = %s", gc.body)
+		}
+	})
+
 	t.Run("priority 0 and empty ollama cache goes to gemini", func(t *testing.T) {
 		g, gc := fakeGemini(t, http.StatusOK, `{"id":"x","choices":[]}`, false)
 		s := newGeminiTestServer(t, g.URL, "http://127.0.0.1:1", 0)

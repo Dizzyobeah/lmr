@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -389,6 +390,9 @@ func (s *Server) proxyGemini(w http.ResponseWriter, r *http.Request, body []byte
 	if err := json.Unmarshal(body, &m); err != nil {
 		return 0, false
 	}
+	if m == nil { // body was JSON null
+		m = map[string]json.RawMessage{}
+	}
 	m["model"], _ = json.Marshal(s.config.Gemini.Model)
 	out, err := json.Marshal(m)
 	if err != nil {
@@ -397,7 +401,11 @@ func (s *Server) proxyGemini(w http.ResponseWriter, r *http.Request, body []byte
 	
 	resp, err := s.geminiClient.ChatCompletions(r.Context(), out)
 	if err != nil {
-		// The error carries the endpoint URL at most; the key is only in a header.
+		// Log the cause without the URL, in case the endpoint carries a query secret.
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			err = uerr.Err
+		}
 		log.Warn().Err(err).Int("status", 0).Msg("Gemini request failed")
 		return 0, false
 	}
@@ -410,7 +418,11 @@ func (s *Server) proxyGemini(w http.ResponseWriter, r *http.Request, body []byte
 	}
 	
 	if !stream {
-		data, err := io.ReadAll(resp.Body)
+		// ponytail: 32 MiB cap on a buffered reply; larger is treated as a failure.
+		data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20+1))
+		if err == nil && len(data) > 32<<20 {
+			err = errors.New("gemini response exceeds 32 MiB")
+		}
 		if err != nil {
 			log.Warn().Err(err).Msg("Gemini response read failed")
 			return 0, false
