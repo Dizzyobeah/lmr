@@ -26,6 +26,7 @@ func Load(configPath string) (*Config, error) {
 	v.BindEnv("auth.encryption_key", "AUTH_ENCRYPTION_KEY")
 	v.BindEnv("admin.password", "ADMIN_PASSWORD")
 	v.BindEnv("ollama.endpoint", "OLLAMA_ENDPOINT")
+	v.BindEnv("gemini.api_key", "GEMINI_API_KEY")
 
 	// Load config file
 	if configPath != "" {
@@ -45,6 +46,11 @@ func Load(configPath string) (*Config, error) {
 		// Config file not found is okay, we'll use defaults and env vars
 	}
 
+	// The Gemini key is env-only; a key in the file is a leak waiting to happen.
+	if v.InConfig("gemini.api_key") {
+		return nil, fmt.Errorf("gemini.api_key must not be set in the config file; use GEMINI_API_KEY")
+	}
+
 	// Unmarshal into config struct
 	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
@@ -58,6 +64,9 @@ func Load(configPath string) (*Config, error) {
 	} else if !strings.HasPrefix(cfg.Admin.Path, "/") {
 		cfg.Admin.Path = "/" + cfg.Admin.Path
 	}
+
+	cfg.Gemini.Endpoint = strings.TrimRight(cfg.Gemini.Endpoint, "/")
+	cfg.Gemini.APIKey = strings.TrimSpace(cfg.Gemini.APIKey)
 
 	// Validate
 	if err := cfg.Validate(); err != nil {
@@ -91,6 +100,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ollama.max_connections", 100)
 	v.SetDefault("ollama.refresh_interval", "5m")
 	v.SetDefault("ollama.num_ctx", 32768)
+
+	// Gemini defaults
+	v.SetDefault("gemini.enabled", false)
+	v.SetDefault("gemini.endpoint", "https://generativelanguage.googleapis.com/v1beta/openai")
+	v.SetDefault("gemini.model", "gemini-2.5-flash")
+	v.SetDefault("gemini.priority", 0)
+	v.SetDefault("gemini.timeout", "120s")
 
 	// Auth defaults
 	v.SetDefault("auth.enabled", true)

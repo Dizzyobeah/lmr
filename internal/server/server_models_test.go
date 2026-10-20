@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/kalle/local-model-router/internal/config"
+	"github.com/kalle/local-model-router/internal/gemini"
 	"github.com/kalle/local-model-router/internal/ollama"
 	"github.com/kalle/local-model-router/pkg/openai"
 )
@@ -65,5 +67,34 @@ func TestHandleListModels_NoForceRoutingReturnsAllModels(t *testing.T) {
 
 	if len(list.Data) != 2 {
 		t.Fatalf("expected all 2 Ollama models, got %d", len(list.Data))
+	}
+}
+
+func TestHandleListModels_Gemini(t *testing.T) {
+	for _, force := range []bool{false, true} {
+		s := newModelsTestServer(force, "auto")
+		s.config.Gemini.Enabled = true
+		s.geminiClient = gemini.NewClient("http://127.0.0.1:1", "k", time.Second)
+
+		rec := httptest.NewRecorder()
+		s.handleListModels(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+		var list openai.ModelList
+		if err := json.NewDecoder(rec.Body).Decode(&list); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+
+		if force {
+			if len(list.Data) != 1 || list.Data[0].ID != "auto" {
+				t.Fatalf("force_routing: got %+v, want only virtual model", list.Data)
+			}
+			continue
+		}
+		if len(list.Data) != 3 {
+			t.Fatalf("got %d models, want 3", len(list.Data))
+		}
+		last := list.Data[2]
+		if last.ID != "gemini-2.5-flash" || last.OwnedBy != "google" {
+			t.Fatalf("gemini entry = %+v", last)
+		}
 	}
 }

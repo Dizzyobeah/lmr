@@ -2,11 +2,14 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -15,6 +18,7 @@ import (
 	"github.com/kalle/local-model-router/internal/admin"
 	"github.com/kalle/local-model-router/internal/classifier"
 	"github.com/kalle/local-model-router/internal/config"
+	"github.com/kalle/local-model-router/internal/gemini"
 	"github.com/kalle/local-model-router/internal/keystore"
 	"github.com/kalle/local-model-router/internal/metrics"
 	"github.com/kalle/local-model-router/internal/middleware"
@@ -30,6 +34,7 @@ type Server struct {
 	router      chi.Router
 	httpServer  *http.Server
 	ollamaClient *ollama.Client
+	geminiClient *gemini.Client // nil when Gemini is disabled
 	modelCache  *ollama.ModelCache
 	keyStore    keystore.Store
 	classifier  *classifier.Classifier
@@ -41,6 +46,7 @@ type Server struct {
 func NewServer(
 	cfg *config.Config,
 	ollamaClient *ollama.Client,
+	geminiClient *gemini.Client,
 	modelCache *ollama.ModelCache,
 	keyStore keystore.Store,
 	classifierInstance *classifier.Classifier,
@@ -50,6 +56,7 @@ func NewServer(
 	s := &Server{
 		config:       cfg,
 		ollamaClient: ollamaClient,
+		geminiClient: geminiClient,
 		modelCache:   modelCache,
 		keyStore:     keyStore,
 		classifier:   classifierInstance,
@@ -278,9 +285,16 @@ func (s *Server) recordRequest(endpoint string, routeResult *classifier.RouteRes
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	
-	// Parse request
+	// Read the body once: Gemini gets it passed through, Ollama gets it
+	// decoded. r.Body is already capped by maxBodyBytes.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeDecodeError(w, err)
+		return
+	}
 	var req openai.ChatCompletionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// Decoder, not Unmarshal: trailing data after the object is ignored, as on main.
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&req); err != nil {
 		writeDecodeError(w, err)
 		return
 	}
@@ -290,6 +304,39 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	
 	// Route to model
 	routeResult := s.modelRouter.Route(content, req.Model)
+	
+	if s.geminiClient != nil {
+		first := geminiFirst(s.config, &req, routeResult)
+		if first || routeResult.Model == "" {
+			reason := "gemini_fallback"
+			if first {
+				reason = "gemini_priority"
+				if !s.config.Routing.ForceRouting && req.Model == s.config.Gemini.Model {
+					reason = "gemini_requested"
+				}
+			}
+			geminiRoute := &classifier.RouteResult{
+				Model:          s.config.Gemini.Model,
+				Reason:         reason,
+				Classification: routeResult.Classification,
+			}
+			status, done := s.proxyGemini(w, r, body, req.Stream, geminiRoute, start)
+			if done {
+				return
+			}
+			if routeResult.Model == "" {
+				apiErr := openai.ErrServiceUnavailable("Gemini request failed and no local model is available")
+				if status == http.StatusTooManyRequests {
+					apiErr = openai.ErrRateLimit("Gemini rate limit exceeded and no local model is available")
+				}
+				openai.WriteError(w, apiErr)
+				s.recordRequest("/v1/chat/completions", geminiRoute, 0, 0, openai.StatusCodeForError(apiErr.Detail.Type), start)
+				return
+			}
+			// Nothing was written yet, so fall back to Ollama below.
+		}
+	}
+	
 	if routeResult.Model == "" {
 		openai.WriteError(w, openai.ErrModelNotFound("No models available"))
 		s.recordRequest("/v1/chat/completions", routeResult, 0, 0, http.StatusNotFound, start)
@@ -322,6 +369,112 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.handleChatNonStream(w, r, ollamaReq, routeResult, start)
 	}
+}
+
+// geminiFirst reports whether a chat request should try Gemini before Ollama.
+// Ollama's priority is fixed at 0 and wins ties because it is local.
+func geminiFirst(cfg *config.Config, req *openai.ChatCompletionRequest, routeResult *classifier.RouteResult) bool {
+	if !cfg.Gemini.Enabled {
+		return false
+	}
+	if !cfg.Routing.ForceRouting && req.Model == cfg.Gemini.Model {
+		return true
+	}
+	return cfg.Gemini.Priority > 0 && routeResult.Reason != "requested_model"
+}
+
+// proxyGemini sends the raw chat body to Gemini with only "model" rewritten
+// (a struct re-marshal would drop image parts). done is true once a response
+// was written to w; when false nothing was written and status is the upstream
+// status (0 on transport error), so the caller may fall back.
+func (s *Server) proxyGemini(w http.ResponseWriter, r *http.Request, body []byte, stream bool, routeResult *classifier.RouteResult, start time.Time) (status int, done bool) {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(body, &m); err != nil {
+		return 0, false
+	}
+	if m == nil { // body was JSON null
+		m = map[string]json.RawMessage{}
+	}
+	m["model"], _ = json.Marshal(s.config.Gemini.Model)
+	out, err := json.Marshal(m)
+	if err != nil {
+		return 0, false
+	}
+	
+	resp, err := s.geminiClient.ChatCompletions(r.Context(), out)
+	if err != nil {
+		// Log the cause without the URL, in case the endpoint carries a query secret.
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			err = uerr.Err
+		}
+		log.Warn().Err(err).Int("status", 0).Msg("Gemini request failed")
+		return 0, false
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		// Never log or forward the upstream body.
+		log.Warn().Int("status", resp.StatusCode).Msg("Gemini request failed")
+		return resp.StatusCode, false
+	}
+	
+	if !stream {
+		// ponytail: 32 MiB cap on a buffered reply; larger is treated as a failure.
+		data, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20+1))
+		if err == nil && len(data) > 32<<20 {
+			err = errors.New("gemini response exceeds 32 MiB")
+		}
+		if err != nil {
+			log.Warn().Err(err).Msg("Gemini response read failed")
+			return 0, false
+		}
+		var parsed struct {
+			Usage *openai.Usage `json:"usage"`
+		}
+		_ = json.Unmarshal(data, &parsed)
+		var promptTokens, completionTokens int
+		if parsed.Usage != nil {
+			promptTokens, completionTokens = parsed.Usage.PromptTokens, parsed.Usage.CompletionTokens
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
+		s.recordRequest("/v1/chat/completions", routeResult, promptTokens, completionTokens, http.StatusOK, start)
+		return http.StatusOK, true
+	}
+	
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return 0, false
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	clearWriteDeadline(w)
+	metrics.StreamingRequests.Inc()
+	defer metrics.StreamingRequests.Dec()
+	
+	buf := make([]byte, 32<<10)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				break
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err != io.EOF {
+				log.Warn().Err(err).Msg("Gemini stream ended with error")
+			}
+			break
+		}
+	}
+	// ponytail: stream token counts recorded as 0; use stream_options.include_usage when needed.
+	s.recordRequest("/v1/chat/completions", routeResult, 0, 0, http.StatusOK, start)
+	return http.StatusOK, true
 }
 
 // handleChatNonStream handles non-streaming chat completions.
@@ -736,6 +889,14 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 			Object:  "model",
 			Created: m.ModifiedAt.Unix(),
 			OwnedBy: "ollama",
+		})
+	}
+	if s.geminiClient != nil {
+		modelList = append(modelList, openai.Model{
+			ID:      s.config.Gemini.Model,
+			Object:  "model",
+			Created: time.Now().Unix(),
+			OwnedBy: "google",
 		})
 	}
 	

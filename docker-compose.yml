@@ -7,6 +7,8 @@ services:
     environment:
       - AUTH_ENCRYPTION_KEY=${AUTH_ENCRYPTION_KEY}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      # Optional: only used when gemini.enabled is true in the config.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       # Talk to the containerized Ollama over the shared Docker network.
       # This avoids the slow host.docker.internal round-trip (~290ms/request
       # on Docker Desktop / WSL2) and keeps router<->Ollama container-to-container.

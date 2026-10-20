@@ -46,7 +46,7 @@ func TestRequestBodyLimit(t *testing.T) {
 			cfg.Server.MaxRequestBodyBytes = limit
 			cache := ollama.NewModelCache(nil, 0)
 			cache.SetModels([]ollama.Model{{Name: "nomic-embed-text"}})
-			s := NewServer(cfg, ollama.NewClient(srv.URL, 5*time.Second, 1), cache, nil, nil, nil, nil)
+			s := NewServer(cfg, ollama.NewClient(srv.URL, 5*time.Second, 1), nil, cache, nil, nil, nil, nil)
 
 			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
 			rec := httptest.NewRecorder()
