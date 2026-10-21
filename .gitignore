@@ -51,10 +51,7 @@ config.yaml
 docker-compose.override.yml
 .env
 .opencode/*
-factory/jobs/*
 .claude/settings.local.json
 # Python
 __pycache__/
 .claude/worktrees/
-factory/board.json
-factory/backlog.md
